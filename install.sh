@@ -15,9 +15,12 @@ if ! command -v python &> /dev/null; then
     exit 1
 fi
 
+# check for python venv
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 
-
-APP_NAME="batttracker-flask-app"
+APP_NAME="batttracker"
 INSTALL_DIR="/opt/$APP_NAME"
 SERVICE_FILE="batttracker.service"
 BACKEND_SERVICE_FILE="batttracker-backend.service"
