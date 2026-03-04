@@ -8,20 +8,21 @@ import sys
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 DATA_DIR = "data"
+BATTERY_NAME = "BAT0"
 
 def read_battery_power():
-    print("Opening /sys/class/power_supply/BAT0/power_now to read battery power")
-    with open("/sys/class/power_supply/BAT0/power_now", "r") as f:
+    print(f"Opening /sys/class/power_supply/{BATTERY_NAME}/power_now to read battery power")
+    with open(f"/sys/class/power_supply/{BATTERY_NAME}/power_now", "r") as f:
         power = int(f.read().strip())
     return power / 1_000_000
 
 def read_battery_charge():
     # returns tuple of (current_charge, full_charge)
-    with open("/sys/class/power_supply/BAT0/energy_full", "r") as f:
+    with open(f"/sys/class/power_supply/{BATTERY_NAME}/energy_full", "r") as f:
         full = int(f.read().strip())
-    with open("/sys/class/power_supply/BAT0/energy_full_design", "r") as f:
+    with open(f"/sys/class/power_supply/{BATTERY_NAME}/energy_full_design", "r") as f:
         full_design = int(f.read().strip())
-    with open("/sys/class/power_supply/BAT0/energy_now", "r") as f:
+    with open(f"/sys/class/power_supply/{BATTERY_NAME}/energy_now", "r") as f:
         current = int(f.read().strip())
     return current / 1_000_000, full / 1_000_000, full_design / 1_000_000
 
