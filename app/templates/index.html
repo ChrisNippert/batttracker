@@ -31,15 +31,15 @@
       max-width: 1400px;
       margin: 0 auto;
       display: grid;
-      grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
-      grid-template-rows: auto auto;
+      grid-template-columns: minmax(220px, 24%) minmax(0, 1fr);
       gap: 1.1rem;
       align-items: stretch;
+      min-height: calc(100vh - 3.5rem);
     }
     .dashboard-panel {
       display: flex;
       flex-direction: column;
-      min-height: 330px;
+      min-height: 0;
     }
     .card {
       background: radial-gradient(circle at top, #111827 0, #020617 55%);
@@ -62,13 +62,13 @@
     }
     .chart-container {
       position: relative;
-      height: 170px;
-      min-height: 100px;
+      height: 185px;
+      min-height: 110px;
       margin-bottom: 0.35rem;
     }
     canvas {
-      max-height: 170px;
-      min-height: 100px;
+      max-height: 185px;
+      min-height: 110px;
     }
     .stats {
       margin-top: 0.3rem;
@@ -118,13 +118,25 @@
       color: #9ca3af;
       margin-bottom: 0.25rem;
     }
-    /* Center battery info: compact two-column layout inside the charge card */
-    #center-panel .stats-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      row-gap: 0.25rem;
-      column-gap: 1.25rem;
+    /* Battery stats side panel */
+    #stats-panel {
+      position: sticky;
+      top: 0.75rem;
+      align-self: stretch;
+      height: calc(100vh - 3.5rem);
     }
-    #center-panel .stat-block {
+    #stats-panel .card {
+      height: 100%;
+    }
+    #stats-panel .stats {
+      flex: 1 1 auto;
+      overflow-y: auto;
+    }
+    #stats-panel .stats-grid {
+      grid-template-columns: 1fr;
+      row-gap: 0.2rem;
+    }
+    #stats-panel .stat-block {
       background: transparent;
       border: none;
       padding: 0.1rem 0;
@@ -132,30 +144,37 @@
       justify-content: space-between;
       align-items: baseline;
     }
-    #center-panel .stat-label {
+    #stats-panel .stat-label {
       color: #9ca3af;
       font-weight: 500;
     }
-    #center-panel .stat-value {
+    #stats-panel .stat-value {
       font-size: 0.9rem;
       color: #e5e7eb;
     }
-    /* Layout for main cards: 2x2 grid */
+    /* Charts grid: power on top, three wattages beneath */
+    #charts-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: minmax(0, 45%) minmax(0, 55%);
+      gap: 1.1rem;
+      align-items: stretch;
+      height: 100%;
+    }
+    #charge-panel {
+      grid-column: 1 / span 3;
+      grid-row: 1;
+    }
     #power-panel {
-      grid-column: 1;
-      grid-row: 1;
-    }
-    #center-panel {
-      grid-column: 2;
-      grid-row: 1;
-      min-height: 420px;
-    }
-    #cpu-panel {
       grid-column: 1;
       grid-row: 2;
     }
-    #gpu-panel {
+    #cpu-panel {
       grid-column: 2;
+      grid-row: 2;
+    }
+    #gpu-panel {
+      grid-column: 3;
       grid-row: 2;
     }
     @media (max-width: 1024px) {
@@ -163,12 +182,12 @@
         display: flex;
         flex-direction: column;
       }
-      #power-panel,
-      #center-panel,
-      #cpu-panel,
-      #gpu-panel {
-        grid-column: auto;
-        grid-row: auto;
+      #stats-panel {
+        position: static;
+      }
+      #charts-grid {
+        display: flex;
+        flex-direction: column;
       }
     }
   </style>
@@ -179,70 +198,11 @@
     <h1>batttracker</h1>
   </header>
   <main>
-    <section class="dashboard-panel" id="power-panel">
-      <div class="card">
-      <div class="card-header">
-        <div>Battery power (W) &mdash; last 24 hours</div>
-        <div id="last-updated">last update: &mdash;</div>
-      </div>
-      <div class="chart-container">
-        <canvas id="powerChart"></canvas>
-      </div>
-
-      <div class="stats">
-        <div>
-          <div class="stats-section-title">Quarters (avg W, 24h)</div>
-          <div class="stats-grid">
-            <div class="stat-block">
-              <div class="stat-label">Q1</div>
-              <div class="stat-value" id="q1-avg">–</div>
-            </div>
-            <div class="stat-block">
-              <div class="stat-label">Q2</div>
-              <div class="stat-value" id="q2-avg">–</div>
-            </div>
-            <div class="stat-block">
-              <div class="stat-label">Q3</div>
-              <div class="stat-value" id="q3-avg">–</div>
-            </div>
-            <div class="stat-block">
-              <div class="stat-label">Q4</div>
-              <div class="stat-value" id="q4-avg">–</div>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div class="stats-section-title">Selection</div>
-          <div class="selection-range" id="sel-range">no selection</div>
-          <div class="stat-block" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem;">
-            <div>
-              <div class="stat-label">Min (W)</div>
-              <div class="stat-value" id="sel-min">–</div>
-            </div>
-            <div>
-              <div class="stat-label">Mean (W)</div>
-              <div class="stat-value" id="sel-mean">–</div>
-            </div>
-            <div>
-              <div class="stat-label">Max (W)</div>
-              <div class="stat-value" id="sel-max">–</div>
-            </div>
-          </div>
-          <div class="selection-hint">
-            Drag on the chart to see stats; selection persists.
-          </div>
-        </div>
-      </div>
-    </section>
-    <section class="dashboard-panel" id="center-panel">
+    <section class="dashboard-panel" id="stats-panel">
       <div class="card">
         <div class="card-header">
-          <div>Battery charge (Wh, % of full) &mdash; last 24 hours</div>
-          <div id="charge-last-updated">last update: &mdash;</div>
-        </div>
-        <div class="chart-container">
-          <canvas id="chargeChart"></canvas>
+          <div>Battery info</div>
+          <div></div>
         </div>
         <div class="stats" style="grid-template-columns: 1fr;">
           <div>
@@ -301,118 +261,192 @@
         </div>
       </div>
     </section>
-    <section class="dashboard-panel" id="cpu-panel">
-      <div class="card">
-        <div class="card-header">
-          <div>CPU package power (W) &mdash; last 24 hours</div>
-          <div id="cpu-last-updated">last update: &mdash;</div>
+    <div id="charts-grid">
+      <section class="dashboard-panel" id="charge-panel">
+        <div class="card">
+          <div class="card-header">
+            <div>Battery charge (Wh, % of full) &mdash; last 24 hours</div>
+            <div id="charge-last-updated">last update: &mdash;</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="chargeChart"></canvas>
+          </div>
         </div>
-        <div class="chart-container">
-          <canvas id="cpuChart"></canvas>
-        </div>
-        <div class="stats">
-          <div>
-            <div class="stats-section-title">Quarters (avg W, 24h)</div>
-            <div class="stats-grid">
-              <div class="stat-block">
-                <div class="stat-label">Q1</div>
-                <div class="stat-value" id="cpu-q1-avg">–</div>
-              </div>
-              <div class="stat-block">
-                <div class="stat-label">Q2</div>
-                <div class="stat-value" id="cpu-q2-avg">–</div>
-              </div>
-              <div class="stat-block">
-                <div class="stat-label">Q3</div>
-                <div class="stat-value" id="cpu-q3-avg">–</div>
-              </div>
-              <div class="stat-block">
-                <div class="stat-label">Q4</div>
-                <div class="stat-value" id="cpu-q4-avg">–</div>
-              </div>
-            </div>
+      </section>
+      <section class="dashboard-panel" id="power-panel">
+        <div class="card">
+          <div class="card-header">
+            <div>Battery power (W) &mdash; last 24 hours</div>
+            <div id="last-updated">last update: &mdash;</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="powerChart"></canvas>
           </div>
 
-          <div>
-            <div class="stats-section-title">Selection</div>
-            <div class="selection-range" id="cpu-sel-range">no selection</div>
-            <div class="stat-block" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem;">
-              <div>
-                <div class="stat-label">Min (W)</div>
-                <div class="stat-value" id="cpu-sel-min">–</div>
-              </div>
-              <div>
-                <div class="stat-label">Mean (W)</div>
-                <div class="stat-value" id="cpu-sel-mean">–</div>
-              </div>
-              <div>
-                <div class="stat-label">Max (W)</div>
-                <div class="stat-value" id="cpu-sel-max">–</div>
-              </div>
-            </div>
-            <div class="selection-hint">
-              Drag on the chart to see stats; selection persists.
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-    <section class="dashboard-panel" id="gpu-panel">
-      <div class="card">
-        <div class="card-header">
-          <div>GPU power (W) &mdash; last 24 hours</div>
-          <div id="gpu-last-updated">last update: &mdash;</div>
-        </div>
-        <div class="chart-container">
-          <canvas id="gpuChart"></canvas>
-        </div>
-        <div class="stats">
-          <div>
-            <div class="stats-section-title">Quarters (avg W, 24h)</div>
-            <div class="stats-grid">
-              <div class="stat-block">
-                <div class="stat-label">Q1</div>
-                <div class="stat-value" id="gpu-q1-avg">–</div>
-              </div>
-              <div class="stat-block">
-                <div class="stat-label">Q2</div>
-                <div class="stat-value" id="gpu-q2-avg">–</div>
-              </div>
-              <div class="stat-block">
-                <div class="stat-label">Q3</div>
-                <div class="stat-value" id="gpu-q3-avg">–</div>
-              </div>
-              <div class="stat-block">
-                <div class="stat-label">Q4</div>
-                <div class="stat-value" id="gpu-q4-avg">–</div>
+          <div class="stats">
+            <div>
+              <div class="stats-section-title">Quarters (avg W, 24h)</div>
+              <div class="stats-grid">
+                <div class="stat-block">
+                  <div class="stat-label">Q1</div>
+                  <div class="stat-value" id="q1-avg">–</div>
+                </div>
+                <div class="stat-block">
+                  <div class="stat-label">Q2</div>
+                  <div class="stat-value" id="q2-avg">–</div>
+                </div>
+                <div class="stat-block">
+                  <div class="stat-label">Q3</div>
+                  <div class="stat-value" id="q3-avg">–</div>
+                </div>
+                <div class="stat-block">
+                  <div class="stat-label">Q4</div>
+                  <div class="stat-value" id="q4-avg">–</div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div>
-            <div class="stats-section-title">Selection</div>
-            <div class="selection-range" id="gpu-sel-range">no selection</div>
-            <div class="stat-block" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem;">
-              <div>
-                <div class="stat-label">Min (W)</div>
-                <div class="stat-value" id="gpu-sel-min">–</div>
+            <div>
+              <div class="stats-section-title">Selection</div>
+              <div class="selection-range" id="sel-range">no selection</div>
+              <div class="stat-block" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem;">
+                <div>
+                  <div class="stat-label">Min (W)</div>
+                  <div class="stat-value" id="sel-min">–</div>
+                </div>
+                <div>
+                  <div class="stat-label">Mean (W)</div>
+                  <div class="stat-value" id="sel-mean">–</div>
+                </div>
+                <div>
+                  <div class="stat-label">Max (W)</div>
+                  <div class="stat-value" id="sel-max">–</div>
+                </div>
               </div>
-              <div>
-                <div class="stat-label">Mean (W)</div>
-                <div class="stat-value" id="gpu-sel-mean">–</div>
+              <div class="stat-block" style="margin-top:0.3rem;">
+                <div class="stat-label">Slope (W/hr)</div>
+                <div class="stat-value" id="sel-slope">–</div>
               </div>
-              <div>
-                <div class="stat-label">Max (W)</div>
-                <div class="stat-value" id="gpu-sel-max">–</div>
+              <div class="selection-hint">
+                Drag on the chart to see stats; selection persists.
               </div>
-            </div>
-            <div class="selection-hint">
-              Drag on the chart to see stats; selection persists.
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+      <section class="dashboard-panel" id="cpu-panel">
+        <div class="card">
+          <div class="card-header">
+            <div>CPU package power (W) &mdash; last 24 hours</div>
+            <div id="cpu-last-updated">last update: &mdash;</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="cpuChart"></canvas>
+          </div>
+          <div class="stats">
+            <div>
+              <div class="stats-section-title">Quarters (avg W, 24h)</div>
+              <div class="stats-grid">
+                <div class="stat-block">
+                  <div class="stat-label">Q1</div>
+                  <div class="stat-value" id="cpu-q1-avg">–</div>
+                </div>
+                <div class="stat-block">
+                  <div class="stat-label">Q2</div>
+                  <div class="stat-value" id="cpu-q2-avg">–</div>
+                </div>
+                <div class="stat-block">
+                  <div class="stat-label">Q3</div>
+                  <div class="stat-value" id="cpu-q3-avg">–</div>
+                </div>
+                <div class="stat-block">
+                  <div class="stat-label">Q4</div>
+                  <div class="stat-value" id="cpu-q4-avg">–</div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="stats-section-title">Selection</div>
+              <div class="selection-range" id="cpu-sel-range">no selection</div>
+              <div class="stat-block" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem;">
+                <div>
+                  <div class="stat-label">Min (W)</div>
+                  <div class="stat-value" id="cpu-sel-min">–</div>
+                </div>
+                <div>
+                  <div class="stat-label">Mean (W)</div>
+                  <div class="stat-value" id="cpu-sel-mean">–</div>
+                </div>
+                <div>
+                  <div class="stat-label">Max (W)</div>
+                  <div class="stat-value" id="cpu-sel-max">–</div>
+                </div>
+              </div>
+              <div class="selection-hint">
+                Drag on the chart to see stats; selection persists.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="dashboard-panel" id="gpu-panel">
+        <div class="card">
+          <div class="card-header">
+            <div>GPU power (W) &mdash; last 24 hours</div>
+            <div id="gpu-last-updated">last update: &mdash;</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="gpuChart"></canvas>
+          </div>
+          <div class="stats">
+            <div>
+              <div class="stats-section-title">Quarters (avg W, 24h)</div>
+              <div class="stats-grid">
+                <div class="stat-block">
+                  <div class="stat-label">Q1</div>
+                  <div class="stat-value" id="gpu-q1-avg">–</div>
+                </div>
+                <div class="stat-block">
+                  <div class="stat-label">Q2</div>
+                  <div class="stat-value" id="gpu-q2-avg">–</div>
+                </div>
+                <div class="stat-block">
+                  <div class="stat-label">Q3</div>
+                  <div class="stat-value" id="gpu-q3-avg">–</div>
+                </div>
+                <div class="stat-block">
+                  <div class="stat-label">Q4</div>
+                  <div class="stat-value" id="gpu-q4-avg">–</div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="stats-section-title">Selection</div>
+              <div class="selection-range" id="gpu-sel-range">no selection</div>
+              <div class="stat-block" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem;">
+                <div>
+                  <div class="stat-label">Min (W)</div>
+                  <div class="stat-value" id="gpu-sel-min">–</div>
+                </div>
+                <div>
+                  <div class="stat-label">Mean (W)</div>
+                  <div class="stat-value" id="gpu-sel-mean">–</div>
+                </div>
+                <div>
+                  <div class="stat-label">Max (W)</div>
+                  <div class="stat-value" id="gpu-sel-max">–</div>
+                </div>
+              </div>
+              <div class="selection-hint">
+                Drag on the chart to see stats; selection persists.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   </main>
 
   <script>
@@ -920,10 +954,12 @@
       const minEl = document.getElementById('sel-min');
       const meanEl = document.getElementById('sel-mean');
       const maxEl = document.getElementById('sel-max');
+      const slopeEl = document.getElementById('sel-slope');
 
       if (!densePowers.length || startIdx == null || endIdx == null) {
         rangeEl.textContent = 'no selection';
         minEl.textContent = meanEl.textContent = maxEl.textContent = '–';
+        if (slopeEl) slopeEl.textContent = '–';
         return;
       }
 
@@ -933,6 +969,7 @@
       if (e <= s) {
         rangeEl.textContent = 'no selection';
         minEl.textContent = meanEl.textContent = maxEl.textContent = '–';
+        if (slopeEl) slopeEl.textContent = '–';
         return;
       }
 
@@ -944,10 +981,20 @@
       const maxV = Math.max(...subPowers);
       const meanV = mean(subPowers);
 
+      // simple slope: change in power over time (W/hr)
+      let slopeStr = '–';
+      const dtHours = (tsEnd - tsStart) / 3600;
+      if (Number.isFinite(dtHours) && dtHours > 0.01) {
+        const dP = subPowers[subPowers.length - 1] - subPowers[0];
+        const slope = dP / dtHours;
+        slopeStr = `${formatW(slope)} W/hr`;
+      }
+
       rangeEl.textContent = `${formatTime(tsStart)} → ${formatTime(tsEnd)}`;
       minEl.textContent = formatW(minV);
       meanEl.textContent = formatW(meanV);
       maxEl.textContent = formatW(maxV);
+      if (slopeEl) slopeEl.textContent = slopeStr;
     }
 
     function findClosestIndexForTs(ts) {
