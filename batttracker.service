@@ -1,0 +1,13 @@
+[Unit]
+Description=Batttracker Flask App
+After=network.target
+
+[Service]
+User=chris
+WorkingDirectory=/opt/batttracker-flask-app
+ExecStart=/opt/batttracker-flask-app/.venv/bin/gunicorn -w 2 -b 0.0.0.0:8678 app.main:app
+Restart=always
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

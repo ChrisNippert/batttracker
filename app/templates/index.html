@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Battery Power Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #111827;
+      color: #e5e7eb;
+    }
+    header {
+      padding: 0.75rem 1.25rem;
+      background: #020617;
+      border-bottom: 1px solid #1f2937;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-size: 1rem;
+      margin: 0;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #9ca3af;
+    }
+    header span {
+      font-size: 0.75rem;
+      color: #4ade80;
+    }
+    main {
+      padding: 1rem 1.25rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .card {
+      background: radial-gradient(circle at top, #111827 0, #020617 55%);
+      border: 1px solid #1f2937;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      font-size: 0.85rem;
+      color: #9ca3af;
+    }
+    .indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+      display: inline-block;
+      margin-right: 0.35rem;
+    }
+    .chart-container {
+      position: relative;
+      height: 60vh;
+      min-height: 280px;
+    }
+    canvas {
+      max-height: 60vh;
+    }
+    .stats {
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      color: #9ca3af;
+      display: grid;
+      grid-template-columns: 1.5fr 1.2fr;
+      gap: 1rem;
+    }
+    .stats-section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.35rem;
+      color: #6b7280;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.5rem;
+    }
+    .stat-block {
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 0.35rem;
+      padding: 0.4rem 0.5rem;
+      border: 1px solid #1f2937;
+    }
+    .stat-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #6b7280;
+      margin-bottom: 0.1rem;
+    }
+    .stat-value {
+      font-size: 0.9rem;
+      color: #e5e7eb;
+    }
+    .selection-hint {
+      font-size: 0.7rem;
+      color: #6b7280;
+      margin-top: 0.25rem;
+    }
+    .selection-range {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      margin-bottom: 0.25rem;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>batttracker</h1>
+    <span><span class="indicator"></span>capturing</span>
+  </header>
+  <main>
+    <section class="card">
+      <div class="card-header">
+        <div>Battery power (W) &mdash; last 24 hours</div>
+        <div id="last-updated">last update: &mdash;</div>
+      </div>
+      <div class="chart-container">
+        <canvas id="powerChart"></canvas>
+      </div>
+
+      <div class="stats">
+        <div>
+          <div class="stats-section-title">Last 24h &mdash; 4 quarters (avg W)</div>
+          <div class="stats-grid">
+            <div class="stat-block">
+              <div class="stat-label">Q1</div>
+              <div class="stat-value" id="q1-avg">–</div>
+            </div>
+            <div class="stat-block">
+              <div class="stat-label">Q2</div>
+              <div class="stat-value" id="q2-avg">–</div>
+            </div>
+            <div class="stat-block">
+              <div class="stat-label">Q3</div>
+              <div class="stat-value" id="q3-avg">–</div>
+            </div>
+            <div class="stat-block">
+              <div class="stat-label">Q4</div>
+              <div class="stat-value" id="q4-avg">–</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="stats-section-title">Selection &mdash; click + drag on graph</div>
+          <div class="selection-range" id="sel-range">no selection</div>
+          <div class="stat-block" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem;">
+            <div>
+              <div class="stat-label">Min (W)</div>
+              <div class="stat-value" id="sel-min">–</div>
+            </div>
+            <div>
+              <div class="stat-label">Mean (W)</div>
+              <div class="stat-value" id="sel-mean">–</div>
+            </div>
+            <div>
+              <div class="stat-label">Max (W)</div>
+              <div class="stat-value" id="sel-max">–</div>
+            </div>
+          </div>
+          <div class="selection-hint">
+            Drag horizontally across the graph to highlight and get stats. Selection is kept across refreshes.
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const canvasEl = document.getElementById('powerChart');
+    const ctx = canvasEl.getContext('2d');
+
+    // data we actually plot / use for stats
+    let denseTimestamps = [];
+    let densePowers = [];
+
+    // selection in *time* space (kept across refreshes)
+    let selectedStartTs = null;
+    let selectedEndTs = null;
+    // same selection in index space
+    let selectedStartIdx = null;
+    let selectedEndIdx = null;
+
+    // drag state (index space)
+    let isDragging = false;
+    let dragStartIdx = null;
+    let dragEndIdx = null;
+
+    function mean(arr) {
+      if (!arr.length) return null;
+      return arr.reduce((a, b) => a + b, 0) / arr.length;
+    }
+
+    function formatW(v) {
+      if (v === null || Number.isNaN(v)) return '–';
+      return v.toFixed(2);
+    }
+
+    function formatTime(ts) {
+      const d = new Date(ts * 1000);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function updateQuarterStats() {
+      const qEls = [
+        document.getElementById('q1-avg'),
+        document.getElementById('q2-avg'),
+        document.getElementById('q3-avg'),
+        document.getElementById('q4-avg')
+      ];
+
+      if (!densePowers.length) {
+        qEls.forEach(el => el.textContent = '–');
+        return;
+      }
+
+      const n = densePowers.length;
+      const base = Math.floor(n / 4) || 1;
+      const boundaries = [
+        0,
+        Math.min(base, n),
+        Math.min(base * 2, n),
+        Math.min(base * 3, n),
+        n
+      ];
+
+      for (let i = 0; i < 4; i++) {
+        const start = boundaries[i];
+        const end = boundaries[i + 1];
+        const slice = densePowers.slice(start, end);
+        qEls[i].textContent = slice.length ? formatW(mean(slice)) : '–';
+      }
+    }
+
+    function updateSelectionStats(startIdx, endIdx) {
+      const rangeEl = document.getElementById('sel-range');
+      const minEl = document.getElementById('sel-min');
+      const meanEl = document.getElementById('sel-mean');
+      const maxEl = document.getElementById('sel-max');
+
+      if (!densePowers.length || startIdx == null || endIdx == null) {
+        rangeEl.textContent = 'no selection';
+        minEl.textContent = meanEl.textContent = maxEl.textContent = '–';
+        return;
+      }
+
+      const s = Math.max(0, Math.min(startIdx, endIdx));
+      const e = Math.min(densePowers.length - 1, Math.max(startIdx, endIdx));
+
+      if (e <= s) {
+        rangeEl.textContent = 'no selection';
+        minEl.textContent = meanEl.textContent = maxEl.textContent = '–';
+        return;
+      }
+
+      const subPowers = densePowers.slice(s, e + 1);
+      const tsStart = denseTimestamps[s];
+      const tsEnd = denseTimestamps[e];
+
+      const minV = Math.min(...subPowers);
+      const maxV = Math.max(...subPowers);
+      const meanV = mean(subPowers);
+
+      rangeEl.textContent = `${formatTime(tsStart)} → ${formatTime(tsEnd)}`;
+      minEl.textContent = formatW(minV);
+      meanEl.textContent = formatW(meanV);
+      maxEl.textContent = formatW(maxV);
+    }
+
+    function findClosestIndexForTs(ts) {
+      if (!denseTimestamps.length || ts == null) return null;
+      let bestIdx = 0;
+      let bestDiff = Math.abs(denseTimestamps[0] - ts);
+      for (let i = 1; i < denseTimestamps.length; i++) {
+        const d = Math.abs(denseTimestamps[i] - ts);
+        if (d < bestDiff) {
+          bestDiff = d;
+          bestIdx = i;
+        }
+      }
+      return bestIdx;
+    }
+
+    const selectionPlugin = {
+      id: 'selectionHighlight',
+      beforeDraw(chart) {
+        const xScale = chart.scales.x;
+        const { ctx, chartArea } = chart;
+        if (!xScale || !chartArea) return;
+
+        const { top, bottom } = chartArea;
+
+        function drawBand(startIdx, endIdx, color) {
+          if (startIdx == null || endIdx == null) return;
+          const s = Math.max(0, Math.min(startIdx, endIdx));
+          const e = Math.min(densePowers.length - 1, Math.max(startIdx, endIdx));
+          if (e <= s) return;
+          const x1 = xScale.getPixelForValue(s);
+          const x2 = xScale.getPixelForValue(e);
+          ctx.save();
+          ctx.fillStyle = color;
+          ctx.fillRect(x1, top, x2 - x1, bottom - top);
+          ctx.restore();
+        }
+
+        // Saved selection
+        drawBand(selectedStartIdx, selectedEndIdx, 'rgba(59,130,246,0.18)');
+        // Live drag
+        if (isDragging) {
+          drawBand(dragStartIdx, dragEndIdx, 'rgba(96,165,250,0.3)');
+        }
+      }
+    };
+
+    Chart.register(selectionPlugin);
+
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Power (W)',
+          data: [],
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34,197,94,0.15)',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.25,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            ticks: {
+              color: '#6b7280',
+              maxTicksLimit: 8,
+              callback: (value) => {
+                const label = chart.data.labels[value];
+                return label || '';
+              }
+            },
+            grid: { color: 'rgba(31,41,55,0.4)' }
+          },
+          y: {
+            ticks: { color: '#6b7280' },
+            grid: { color: 'rgba(31,41,55,0.4)' }
+          }
+        },
+        plugins: {
+          legend: { labels: { color: '#9ca3af' } }
+        }
+      }
+    });
+
+    async function fetchData() {
+      try {
+        const res = await fetch('/api/past24');
+        const json = await res.json();
+
+        // force numeric + sort by time
+        let timestamps = (json.timestamps || []).map(Number);
+        let powers = (json.powers || []).map(Number);
+        const zipped = timestamps.map((t, i) => [t, powers[i]])
+          .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v))
+          .sort((a, b) => a[0] - b[0]);
+
+        if (!zipped.length) {
+          denseTimestamps = [];
+          densePowers = [];
+          chart.data.labels = [];
+          chart.data.datasets[0].data = [];
+          chart.update('none');
+          updateQuarterStats();
+          updateSelectionStats(null, null);
+          document.getElementById('last-updated').textContent = 'last update: no data yet';
+          return;
+        }
+
+        timestamps = zipped.map(p => p[0]);
+        powers = zipped.map(p => p[1]);
+
+        // build dense arrays, inserting a 0 in large gaps
+        denseTimestamps = [timestamps[0]];
+        densePowers = [powers[0]];
+        const GAP_THRESHOLD = 15; // seconds; your capture interval is 5s
+
+        for (let i = 1; i < timestamps.length; i++) {
+          const prevT = timestamps[i - 1];
+          const currT = timestamps[i];
+          const currV = powers[i];
+
+          const gap = currT - prevT;
+          if (gap > GAP_THRESHOLD) {
+            const mid = prevT + gap / 2;
+            denseTimestamps.push(mid);
+            densePowers.push(0);    // gap -> treat as 0, but only one point
+          }
+
+          denseTimestamps.push(currT);
+          densePowers.push(currV);
+        }
+
+        const labels = denseTimestamps.map(ts => formatTime(ts));
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = densePowers;
+        chart.update('none');
+
+        const lastTs = denseTimestamps[denseTimestamps.length - 1];
+        const lastUpdated = document.getElementById('last-updated');
+        if (lastTs) {
+          lastUpdated.textContent = 'last update: ' +
+            new Date(lastTs * 1000).toLocaleTimeString();
+        } else {
+          lastUpdated.textContent = 'last update: no data yet';
+        }
+
+        updateQuarterStats();
+
+        // remap saved selection back to indices
+        if (selectedStartTs != null && selectedEndTs != null) {
+          selectedStartIdx = findClosestIndexForTs(selectedStartTs);
+          selectedEndIdx = findClosestIndexForTs(selectedEndTs);
+          updateSelectionStats(selectedStartIdx, selectedEndIdx);
+        } else {
+          updateSelectionStats(null, null);
+        }
+
+        chart.draw();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    fetchData();
+    setInterval(fetchData, 5000);
+
+    function getRelativeX(evt) {
+      const rect = canvasEl.getBoundingClientRect();
+      return evt.clientX - rect.left;
+    }
+
+    function indexFromX(x) {
+      const xScale = chart.scales.x;
+      if (!xScale) return null;
+      let v = xScale.getValueForPixel(x);
+      if (!isFinite(v)) return null;
+      v = Math.round(v);
+      v = Math.max(0, Math.min(densePowers.length - 1, v));
+      return v;
+    }
+
+    function finishDrag() {
+      if (!isDragging) return;
+      isDragging = false;
+
+      if (dragStartIdx == null || dragEndIdx == null) {
+        dragStartIdx = dragEndIdx = null;
+        return;
+      }
+
+      const s = Math.max(0, Math.min(dragStartIdx, dragEndIdx));
+      const e = Math.min(densePowers.length - 1, Math.max(dragStartIdx, dragEndIdx));
+
+      // tiny drag -> clear selection
+      if (Math.abs(e - s) < 2) {
+        selectedStartTs = selectedEndTs = null;
+        selectedStartIdx = selectedEndIdx = null;
+        dragStartIdx = dragEndIdx = null;
+        updateSelectionStats(null, null);
+        chart.draw();
+        return;
+      }
+
+      selectedStartIdx = s;
+      selectedEndIdx = e;
+      selectedStartTs = denseTimestamps[s];
+      selectedEndTs = denseTimestamps[e];
+
+      dragStartIdx = dragEndIdx = null;
+      updateSelectionStats(selectedStartIdx, selectedEndIdx);
+      chart.draw();
+    }
+
+    canvasEl.addEventListener('mousedown', (e) => {
+      if (!densePowers.length) return;
+      isDragging = true;
+      const x = getRelativeX(e);
+      const idx = indexFromX(x);
+      dragStartIdx = dragEndIdx = idx;
+      chart.draw();
+    });
+
+    canvasEl.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const x = getRelativeX(e);
+      const idx = indexFromX(x);
+      dragEndIdx = idx;
+      chart.draw();
+    });
+
+    canvasEl.addEventListener('mouseup', () => {
+      finishDrag();
+    });
+
+    canvasEl.addEventListener('mouseleave', () => {
+      if (isDragging) finishDrag();
+    });
+  </script>
+</body>
+</html>
