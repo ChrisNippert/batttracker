@@ -12,7 +12,7 @@
       color: #e5e7eb;
     }
     header {
-      padding: 0.75rem 1.25rem;
+      padding: 0.5rem 1.1rem;
       background: #020617;
       border-bottom: 1px solid #1f2937;
       display: flex;
@@ -20,53 +20,32 @@
       justify-content: space-between;
     }
     header h1 {
-      font-size: 1rem;
+      font-size: 0.9rem;
       margin: 0;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: #9ca3af;
     }
     main {
-      padding: 1rem 1.25rem;
-      max-width: 1200px;
+      padding: 0.75rem 1.1rem;
+      max-width: 1400px;
       margin: 0 auto;
-      display: flex;
-      flex-direction: row;
-      gap: 1.5rem;
-      flex-wrap: wrap;
-      align-items: flex-start;
-    }
-    #battery-status-bar {
-      width: 100%;
-      padding: 0.5rem 1rem;
-      background: #020617;
-      border: 1px solid #1f2937;
-      border-radius: 0.5rem;
-      display: flex;
-      align-items: center;
-      font-size: 0.75rem;
-      color: #9ca3af;
-      margin: 0.5rem 0 1rem 0;
-      box-sizing: border-box;
-      column-gap: 1.5rem;
-      flex-wrap: wrap;
-    }
-    #battery-status-bar span {
-      font-size: 0.75rem;
+      display: grid;
+      grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
+      grid-template-rows: auto auto;
+      gap: 1.1rem;
+      align-items: stretch;
     }
     .dashboard-panel {
-      flex: 1 1 420px;
-      min-width: 340px;
-      max-width: 600px;
       display: flex;
       flex-direction: column;
-      min-height: 420px;
+      min-height: 330px;
     }
     .card {
       background: radial-gradient(circle at top, #111827 0, #020617 55%);
       border: 1px solid #1f2937;
       border-radius: 0.5rem;
-      padding: 0.75rem 1rem 0.5rem 1rem;
+      padding: 0.65rem 0.9rem 0.5rem 0.9rem;
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.65);
       flex: 1 1 auto;
       display: flex;
@@ -81,32 +60,24 @@
       font-size: 0.85rem;
       color: #9ca3af;
     }
-    .indicator {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: #22c55e;
-      box-shadow: 0 0 8px #22c55e;
-      display: inline-block;
-      margin-right: 0.35rem;
-    }
     .chart-container {
       position: relative;
-      height: 220px;
-      min-height: 120px;
-      margin-bottom: 0.5rem;
+      height: 170px;
+      min-height: 100px;
+      margin-bottom: 0.35rem;
     }
     canvas {
-      max-height: 220px;
-      min-height: 120px;
+      max-height: 170px;
+      min-height: 100px;
     }
     .stats {
-      margin-top: 0.5rem;
+      margin-top: 0.3rem;
       font-size: 0.8rem;
       color: #9ca3af;
       display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 0.7rem;
+      grid-template-columns: 1fr;
+      gap: 0.8rem;
+      align-items: stretch;
     }
     .stats-section-title {
       font-size: 0.75rem;
@@ -117,8 +88,8 @@
     }
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.5rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.6rem;
     }
     .stat-block {
       background: rgba(15, 23, 42, 0.8);
@@ -147,6 +118,59 @@
       color: #9ca3af;
       margin-bottom: 0.25rem;
     }
+    /* Center battery info: compact two-column layout inside the charge card */
+    #center-panel .stats-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      row-gap: 0.25rem;
+      column-gap: 1.25rem;
+    }
+    #center-panel .stat-block {
+      background: transparent;
+      border: none;
+      padding: 0.1rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    #center-panel .stat-label {
+      color: #9ca3af;
+      font-weight: 500;
+    }
+    #center-panel .stat-value {
+      font-size: 0.9rem;
+      color: #e5e7eb;
+    }
+    /* Layout for main cards: 2x2 grid */
+    #power-panel {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    #center-panel {
+      grid-column: 2;
+      grid-row: 1;
+      min-height: 420px;
+    }
+    #cpu-panel {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    #gpu-panel {
+      grid-column: 2;
+      grid-row: 2;
+    }
+    @media (max-width: 1024px) {
+      main {
+        display: flex;
+        flex-direction: column;
+      }
+      #power-panel,
+      #center-panel,
+      #cpu-panel,
+      #gpu-panel {
+        grid-column: auto;
+        grid-row: auto;
+      }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -155,22 +179,7 @@
     <h1>batttracker</h1>
   </header>
   <main>
-    <div id="battery-status-bar">
-      <span class="indicator" id="charging-indicator"></span>
-      <span id="charging-text">capturing</span>
-      <span id="cycle-info" style="margin-left:1.5em;"></span>
-      <span id="design-capacity-info" style="margin-left:1.5em;"></span>
-      <span id="health-info" style="margin-left:1.5em;"></span>
-      <span id="temp-info" style="margin-left:1.5em;"></span>
-      <span id="manuf-info" style="margin-left:1.5em;"></span>
-      <span style="margin-left:1.5em;">
-        To empty: <span id="charge-eta-empty">–</span>
-      </span>
-      <span style="margin-left:1.5em;">
-        To full: <span id="charge-eta-full">–</span>
-      </span>
-    </div>
-    <section class="dashboard-panel">
+    <section class="dashboard-panel" id="power-panel">
       <div class="card">
       <div class="card-header">
         <div>Battery power (W) &mdash; last 24 hours</div>
@@ -182,7 +191,7 @@
 
       <div class="stats">
         <div>
-          <div class="stats-section-title">Last 24h &mdash; 4 quarters (avg W)</div>
+          <div class="stats-section-title">Quarters (avg W, 24h)</div>
           <div class="stats-grid">
             <div class="stat-block">
               <div class="stat-label">Q1</div>
@@ -204,7 +213,7 @@
         </div>
 
         <div>
-          <div class="stats-section-title">Selection &mdash; click + drag on graph</div>
+          <div class="stats-section-title">Selection</div>
           <div class="selection-range" id="sel-range">no selection</div>
           <div class="stat-block" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem;">
             <div>
@@ -221,12 +230,12 @@
             </div>
           </div>
           <div class="selection-hint">
-            Drag horizontally across the graph to highlight and get stats. Selection is kept across refreshes.
+            Drag on the chart to see stats; selection persists.
           </div>
         </div>
       </div>
     </section>
-    <section class="dashboard-panel">
+    <section class="dashboard-panel" id="center-panel">
       <div class="card">
         <div class="card-header">
           <div>Battery charge (Wh, % of full) &mdash; last 24 hours</div>
@@ -235,45 +244,64 @@
         <div class="chart-container">
           <canvas id="chargeChart"></canvas>
         </div>
-        <div class="stats">
+        <div class="stats" style="grid-template-columns: 1fr;">
           <div>
-            <div class="stats-section-title">Last 24h &mdash; 4 quarters (avg %)</div>
+            <div class="stats-section-title">Battery stats</div>
             <div class="stats-grid">
-              <div class="stat-block"><div class="stat-label">Q1</div><div class="stat-value" id="charge-q1-avg">–</div></div>
-              <div class="stat-block"><div class="stat-label">Q2</div><div class="stat-value" id="charge-q2-avg">–</div></div>
-              <div class="stat-block"><div class="stat-label">Q3</div><div class="stat-value" id="charge-q3-avg">–</div></div>
-              <div class="stat-block"><div class="stat-label">Q4</div><div class="stat-value" id="charge-q4-avg">–</div></div>
-            </div>
-          </div>
-          <div>
-            <div class="stats-section-title">Selection &mdash; click + drag on graph</div>
-            <div class="selection-range" id="charge-sel-range">no selection</div>
-            <div class="stat-block" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0.5rem;">
-              <div>
-                <div class="stat-label">Min (%)</div>
-                <div class="stat-value" id="charge-sel-min">–</div>
+              <div class="stat-block">
+                <div class="stat-label">Status</div>
+                <div class="stat-value" id="battery-stat-status">–</div>
               </div>
-              <div>
-                <div class="stat-label">Mean (%)</div>
-                <div class="stat-value" id="charge-sel-mean">–</div>
+              <div class="stat-block">
+                <div class="stat-label">Charge (%)</div>
+                <div class="stat-value" id="battery-stat-percent">–</div>
               </div>
-              <div>
-                <div class="stat-label">Max (%)</div>
-                <div class="stat-value" id="charge-sel-max">–</div>
-              </div>
-              <div>
+              <div class="stat-block">
                 <div class="stat-label">Slope</div>
-                <div class="stat-value" id="charge-sel-slope">–</div>
+                <div class="stat-value" id="battery-stat-slope">–</div>
               </div>
-            </div>
-            <div class="selection-hint">
-              Drag horizontally across the graph to highlight and get stats. Slope is in %/hr and Wh/hr.
+              <div class="stat-block">
+                <div class="stat-label">Time to empty</div>
+                <div class="stat-value" id="battery-stat-eta-empty">–</div>
+              </div>
+              <div class="stat-block">
+                <div class="stat-label">Time to full</div>
+                <div class="stat-value" id="battery-stat-eta-full">–</div>
+              </div>
+              <div class="stat-block">
+                <div class="stat-label">Now (Wh)</div>
+                <div class="stat-value" id="battery-stat-now">–</div>
+              </div>
+              <div class="stat-block">
+                <div class="stat-label">Full (Wh)</div>
+                <div class="stat-value" id="battery-stat-full">–</div>
+              </div>
+              <div class="stat-block">
+                <div class="stat-label">Design (Wh)</div>
+                <div class="stat-value" id="battery-stat-design">–</div>
+              </div>
+              <div class="stat-block">
+                <div class="stat-label">Health</div>
+                <div class="stat-value" id="battery-stat-health">–</div>
+              </div>
+              <div class="stat-block">
+                <div class="stat-label">Temp (°C)</div>
+                <div class="stat-value" id="battery-stat-temp">–</div>
+              </div>
+              <div class="stat-block">
+                <div class="stat-label">Cycles</div>
+                <div class="stat-value" id="battery-stat-cycles">–</div>
+              </div>
+              <div class="stat-block">
+                <div class="stat-label">Battery</div>
+                <div class="stat-value" id="battery-stat-manuf">–</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </section>
-    <section class="dashboard-panel">
+    <section class="dashboard-panel" id="cpu-panel">
       <div class="card">
         <div class="card-header">
           <div>CPU package power (W) &mdash; last 24 hours</div>
@@ -284,7 +312,7 @@
         </div>
         <div class="stats">
           <div>
-            <div class="stats-section-title">Last 24h &mdash; 4 quarters (avg W)</div>
+            <div class="stats-section-title">Quarters (avg W, 24h)</div>
             <div class="stats-grid">
               <div class="stat-block">
                 <div class="stat-label">Q1</div>
@@ -306,7 +334,7 @@
           </div>
 
           <div>
-            <div class="stats-section-title">Selection &mdash; click + drag on graph</div>
+            <div class="stats-section-title">Selection</div>
             <div class="selection-range" id="cpu-sel-range">no selection</div>
             <div class="stat-block" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem;">
               <div>
@@ -323,13 +351,13 @@
               </div>
             </div>
             <div class="selection-hint">
-              Drag horizontally across the graph to highlight and get stats. Selection is kept across refreshes.
+              Drag on the chart to see stats; selection persists.
             </div>
           </div>
         </div>
       </div>
     </section>
-    <section class="dashboard-panel">
+    <section class="dashboard-panel" id="gpu-panel">
       <div class="card">
         <div class="card-header">
           <div>GPU power (W) &mdash; last 24 hours</div>
@@ -340,7 +368,7 @@
         </div>
         <div class="stats">
           <div>
-            <div class="stats-section-title">Last 24h &mdash; 4 quarters (avg W)</div>
+            <div class="stats-section-title">Quarters (avg W, 24h)</div>
             <div class="stats-grid">
               <div class="stat-block">
                 <div class="stat-label">Q1</div>
@@ -362,7 +390,7 @@
           </div>
 
           <div>
-            <div class="stats-section-title">Selection &mdash; click + drag on graph</div>
+            <div class="stats-section-title">Selection</div>
             <div class="selection-range" id="gpu-sel-range">no selection</div>
             <div class="stat-block" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem;">
               <div>
@@ -379,7 +407,7 @@
               </div>
             </div>
             <div class="selection-hint">
-              Drag horizontally across the graph to highlight and get stats. Selection is kept across refreshes.
+              Drag on the chart to see stats; selection persists.
             </div>
           </div>
         </div>
@@ -403,66 +431,49 @@
         const manuf = json.manufacturer;
         const model = json.model;
 
-        const indicator = document.getElementById('charging-indicator');
-        const text = document.getElementById('charging-text');
-        const cycleInfo = document.getElementById('cycle-info');
-        const designCapInfo = document.getElementById('design-capacity-info');
-        const healthInfo = document.getElementById('health-info');
-        const tempInfo = document.getElementById('temp-info');
-        const manufInfo = document.getElementById('manuf-info');
+        const centerStatusEl = document.getElementById('battery-stat-status');
+        const centerHealthEl = document.getElementById('battery-stat-health');
+        const centerTempEl = document.getElementById('battery-stat-temp');
+        const centerCyclesEl = document.getElementById('battery-stat-cycles');
+        const centerDesignEl = document.getElementById('battery-stat-design');
+        const centerManufEl = document.getElementById('battery-stat-manuf');
 
-        if (status === 'Charging') {
-          indicator.style.background = '#fbbf24';
-          indicator.style.boxShadow = '0 0 8px #fbbf24';
-          text.textContent = 'Charging';
-        } else if (status === 'Discharging') {
-          indicator.style.background = '#22c55e';
-          indicator.style.boxShadow = '0 0 8px #22c55e';
-          text.textContent = 'Discharging';
-        } else if (status === 'Full') {
-          indicator.style.background = '#38bdf8';
-          indicator.style.boxShadow = '0 0 8px #38bdf8';
-          text.textContent = 'Full';
-        } else {
-          indicator.style.background = '#9ca3af';
-          indicator.style.boxShadow = '0 0 8px #9ca3af';
-          text.textContent = status;
-        }
+        if (centerStatusEl) centerStatusEl.textContent = status;
 
         if (cycles !== null && cycles !== undefined) {
-          cycleInfo.textContent = `Cycles: ${cycles}`;
+          if (centerCyclesEl) centerCyclesEl.textContent = cycles;
         } else {
-          cycleInfo.textContent = '';
+          if (centerCyclesEl) centerCyclesEl.textContent = '–';
         }
 
         if (designCap !== null && designCap !== undefined) {
-          designCapInfo.textContent = `Design: ${designCap.toFixed(2)} Wh`;
+          if (centerDesignEl) centerDesignEl.textContent = designCap.toFixed(2);
         } else {
-          designCapInfo.textContent = '';
+          if (centerDesignEl) centerDesignEl.textContent = '–';
         }
 
         if (health !== null && health !== undefined) {
-          healthInfo.textContent = `Health: ${health.toFixed(1)}%`;
+          if (centerHealthEl) centerHealthEl.textContent = `${health.toFixed(1)}%`;
         } else {
-          healthInfo.textContent = '';
+          if (centerHealthEl) centerHealthEl.textContent = '–';
         }
 
         if (temp !== null && temp !== undefined) {
-          tempInfo.textContent = `Temp: ${temp.toFixed(1)}°C`;
+          if (centerTempEl) centerTempEl.textContent = temp.toFixed(1);
         } else {
-          tempInfo.textContent = '';
+          if (centerTempEl) centerTempEl.textContent = '–';
         }
 
         if (manuf || model) {
-          manufInfo.textContent = `${manuf || ''}${manuf && model ? ' ' : ''}${model || ''}`;
+          if (centerManufEl) centerManufEl.textContent = `${manuf || ''}${manuf && model ? ' ' : ''}${model || ''}`;
         } else {
-          manufInfo.textContent = '';
+          if (centerManufEl) centerManufEl.textContent = '–';
         }
 
         lastBatteryStatus = status;
       } catch (e) {
-        const text = document.getElementById('charging-text');
-        if (text) text.textContent = 'Unknown';
+        const centerStatusEl = document.getElementById('battery-stat-status');
+        if (centerStatusEl) centerStatusEl.textContent = 'Unknown';
       }
     }
 
@@ -488,6 +499,7 @@
         let chargeIsDragging = false;
         let chargeDragStartIdx = null;
         let chargeDragEndIdx = null;
+        let chargeHasUserSelection = false;
 
         function formatPercent(v) {
           if (v === null || Number.isNaN(v)) return '–';
@@ -510,64 +522,31 @@
           }
           return `${minutes}m`;
         }
-        function updateChargeQuarterStats() {
-          const qEls = [
-            document.getElementById('charge-q1-avg'),
-            document.getElementById('charge-q2-avg'),
-            document.getElementById('charge-q3-avg'),
-            document.getElementById('charge-q4-avg')
-          ];
-          if (!chargePercents.length) {
-            qEls.forEach(el => el.textContent = '–');
-            return;
-          }
-          const n = chargePercents.length;
-          const base = Math.floor(n / 4) || 1;
-          const boundaries = [0, Math.min(base, n), Math.min(base*2, n), Math.min(base*3, n), n];
-          for (let i = 0; i < 4; i++) {
-            const start = boundaries[i];
-            const end = boundaries[i+1];
-            const slice = chargePercents.slice(start, end);
-            qEls[i].textContent = slice.length ? formatPercent(mean(slice)) : '–';
-          }
-        }
         function updateChargeSelectionStats(startIdx, endIdx) {
-          const rangeEl = document.getElementById('charge-sel-range');
-          const minEl = document.getElementById('charge-sel-min');
-          const meanEl = document.getElementById('charge-sel-mean');
-          const maxEl = document.getElementById('charge-sel-max');
-          const slopeEl = document.getElementById('charge-sel-slope');
+          const slopeEl = document.getElementById('battery-stat-slope');
+          if (!slopeEl) return;
           if (!chargePercents.length || startIdx == null || endIdx == null) {
-            rangeEl.textContent = 'no selection';
-            minEl.textContent = meanEl.textContent = maxEl.textContent = slopeEl.textContent = '–';
+            slopeEl.textContent = '–';
             return;
           }
           const s = Math.max(0, Math.min(startIdx, endIdx));
           const e = Math.min(chargePercents.length - 1, Math.max(startIdx, endIdx));
           if (e <= s) {
-            rangeEl.textContent = 'no selection';
-            minEl.textContent = meanEl.textContent = maxEl.textContent = slopeEl.textContent = '–';
+            slopeEl.textContent = '–';
             return;
           }
           const subPercents = chargePercents.slice(s, e + 1);
           const subWhs = chargeWhs.slice(s, e + 1);
           const tsStart = chargeTimestamps[s];
           const tsEnd = chargeTimestamps[e];
-          const minV = Math.min(...subPercents);
-          const maxV = Math.max(...subPercents);
-          const meanV = mean(subPercents);
-          // Slope calculation
           const dt = (tsEnd - tsStart) / 3600; // hours
           let slopeStr = '–';
           if (dt > 0.01) {
-            const dPercent = subPercents[subPercents.length-1] - subPercents[0];
-            const dWh = subWhs[subWhs.length-1] - subWhs[0];
-            slopeStr = `${formatPercent(dPercent/dt)}%/hr, ${formatWh(dWh/dt)} Wh/hr`;
+            const dPercent = subPercents[subPercents.length - 1] - subPercents[0];
+            const dWh = subWhs[subWhs.length - 1] - subWhs[0];
+            // dWh/dt in hours is watts; show correct units
+            slopeStr = `${formatPercent(dPercent / dt)}%/hr, ${formatWh(dWh / dt)} W`;
           }
-          rangeEl.textContent = `${formatTime(tsStart)} → ${formatTime(tsEnd)}`;
-          minEl.textContent = formatPercent(minV);
-          meanEl.textContent = formatPercent(meanV);
-          maxEl.textContent = formatPercent(maxV);
           slopeEl.textContent = slopeStr;
         }
         function chargeFindClosestIndexForTs(ts) {
@@ -602,7 +581,9 @@
               ctx.fillRect(x1, top, x2 - x1, bottom - top);
               ctx.restore();
             }
-            drawBand(chargeSelectedStartIdx, chargeSelectedEndIdx, 'rgba(59,130,246,0.18)');
+            if (chargeHasUserSelection) {
+              drawBand(chargeSelectedStartIdx, chargeSelectedEndIdx, 'rgba(59,130,246,0.18)');
+            }
             if (chargeIsDragging) {
               drawBand(chargeDragStartIdx, chargeDragEndIdx, 'rgba(96,165,250,0.3)');
             }
@@ -672,13 +653,13 @@
           }
         });
         function updateChargeEta() {
-          const etaEmptyEl = document.getElementById('charge-eta-empty');
-          const etaFullEl = document.getElementById('charge-eta-full');
-          if (!etaEmptyEl || !etaFullEl) return;
+          const centerEtaEmptyEl = document.getElementById('battery-stat-eta-empty');
+          const centerEtaFullEl = document.getElementById('battery-stat-eta-full');
+          if (!centerEtaEmptyEl || !centerEtaFullEl) return;
 
           if (!chargeWhs.length || !chargeFulls.length || latestPowerW == null || !Number.isFinite(latestPowerW) || Math.abs(latestPowerW) < 0.1) {
-            etaEmptyEl.textContent = '–';
-            etaFullEl.textContent = '–';
+            centerEtaEmptyEl.textContent = '–';
+            centerEtaFullEl.textContent = '–';
             return;
           }
 
@@ -708,8 +689,11 @@
             }
           }
 
-          etaEmptyEl.textContent = etaEmpty && etaEmpty > 0.03 ? formatDurationHours(etaEmpty) : '–';
-          etaFullEl.textContent = etaFull && etaFull > 0.03 ? formatDurationHours(etaFull) : '–';
+          const etaEmptyStr = etaEmpty && etaEmpty > 0.03 ? formatDurationHours(etaEmpty) : '–';
+          const etaFullStr = etaFull && etaFull > 0.03 ? formatDurationHours(etaFull) : '–';
+
+          centerEtaEmptyEl.textContent = etaEmptyStr;
+          centerEtaFullEl.textContent = etaFullStr;
         }
         async function fetchChargeData() {
           try {
@@ -733,7 +717,6 @@
               chargeChart.data.datasets[0].data = [];
               chargeChart.data.datasets[1].data = [];
               chargeChart.update('none');
-              updateChargeQuarterStats();
               updateChargeSelectionStats(null, null);
               document.getElementById('charge-last-updated').textContent = 'last update: no data yet';
               return;
@@ -747,6 +730,22 @@
             chargeChart.data.datasets[0].data = chargeWhs;
             chargeChart.data.datasets[1].data = chargePercents;
             chargeChart.update('none');
+            // Update centerpiece battery stats that depend on charge history
+            const centerPercentEl = document.getElementById('battery-stat-percent');
+            const centerNowEl = document.getElementById('battery-stat-now');
+            const centerFullEl = document.getElementById('battery-stat-full');
+            if (chargePercents.length && centerPercentEl) {
+              const lastPct = chargePercents[chargePercents.length - 1];
+              centerPercentEl.textContent = Number.isFinite(lastPct) ? formatPercent(lastPct) : '–';
+            }
+            if (chargeWhs.length && centerNowEl) {
+              const lastWh = chargeWhs[chargeWhs.length - 1];
+              centerNowEl.textContent = Number.isFinite(lastWh) ? formatWh(lastWh) : '–';
+            }
+            if (chargeFulls.length && centerFullEl) {
+              const lastFullWh = chargeFulls[chargeFulls.length - 1];
+              centerFullEl.textContent = Number.isFinite(lastFullWh) ? formatWh(lastFullWh) : '–';
+            }
             const lastTs = chargeTimestamps[chargeTimestamps.length - 1];
             const lastUpdated = document.getElementById('charge-last-updated');
             if (lastTs) {
@@ -754,18 +753,17 @@
             } else {
               lastUpdated.textContent = 'last update: no data yet';
             }
-            updateChargeQuarterStats();
-            if (chargeSelectedStartTs != null && chargeSelectedEndTs != null) {
+            if (chargeHasUserSelection && chargeSelectedStartTs != null && chargeSelectedEndTs != null) {
               chargeSelectedStartIdx = chargeFindClosestIndexForTs(chargeSelectedStartTs);
               chargeSelectedEndIdx = chargeFindClosestIndexForTs(chargeSelectedEndTs);
               updateChargeSelectionStats(chargeSelectedStartIdx, chargeSelectedEndIdx);
             } else {
-              // Default to full-range selection when nothing is selected
-              chargeSelectedStartIdx = 0;
-              chargeSelectedEndIdx = chargePercents.length - 1;
-              chargeSelectedStartTs = chargeTimestamps[0];
-              chargeSelectedEndTs = chargeTimestamps[chargeTimestamps.length - 1];
-              updateChargeSelectionStats(chargeSelectedStartIdx, chargeSelectedEndIdx);
+              // No explicit user selection: show full-range stats and keep them updated
+              if (chargePercents.length) {
+                updateChargeSelectionStats(0, chargePercents.length - 1);
+              } else {
+                updateChargeSelectionStats(null, null);
+              }
             }
             updateChargeEta();
             chargeChart.draw();
@@ -798,10 +796,16 @@
           const s = Math.max(0, Math.min(chargeDragStartIdx, chargeDragEndIdx));
           const e = Math.min(chargePercents.length - 1, Math.max(chargeDragStartIdx, chargeDragEndIdx));
           if (Math.abs(e - s) < 2) {
+            // clear user selection and revert to full-range stats
+            chargeHasUserSelection = false;
             chargeSelectedStartTs = chargeSelectedEndTs = null;
             chargeSelectedStartIdx = chargeSelectedEndIdx = null;
             chargeDragStartIdx = chargeDragEndIdx = null;
-            updateChargeSelectionStats(null, null);
+            if (chargePercents.length) {
+              updateChargeSelectionStats(0, chargePercents.length - 1);
+            } else {
+              updateChargeSelectionStats(null, null);
+            }
             chargeChart.draw();
             return;
           }
@@ -809,6 +813,7 @@
           chargeSelectedEndIdx = e;
           chargeSelectedStartTs = chargeTimestamps[s];
           chargeSelectedEndTs = chargeTimestamps[e];
+          chargeHasUserSelection = true;
           chargeDragStartIdx = chargeDragEndIdx = null;
           updateChargeSelectionStats(chargeSelectedStartIdx, chargeSelectedEndIdx);
           chargeChart.draw();
@@ -848,6 +853,9 @@
     let denseTimestamps = [];
     let densePowers = [];
     let latestPowerW = null;
+
+    // whether the user has explicitly chosen a selection range
+    let hasUserSelection = false;
 
     // selection in *time* space (kept across refreshes)
     let selectedStartTs = null;
@@ -978,8 +986,10 @@
           ctx.restore();
         }
 
-        // Saved selection
-        drawBand(selectedStartIdx, selectedEndIdx, 'rgba(59,130,246,0.18)');
+        // Saved selection only if user explicitly selected a range
+        if (hasUserSelection) {
+          drawBand(selectedStartIdx, selectedEndIdx, 'rgba(59,130,246,0.18)');
+        }
         // Live drag
         if (isDragging) {
           drawBand(dragStartIdx, dragEndIdx, 'rgba(96,165,250,0.3)');
@@ -997,7 +1007,7 @@
           label: 'Power (W)',
           data: [],
           borderColor: '#22c55e',
-          backgroundColor: 'rgba(34,197,94,0.15)',
+          backgroundColor: 'rgba(34,197,94,0.20)',
           borderWidth: 2,
           pointRadius: 0,
           tension: 0.25,
@@ -1097,18 +1107,13 @@
 
         updateQuarterStats();
 
-        // remap saved selection back to indices
-        if (selectedStartTs != null && selectedEndTs != null) {
+        // If the user has a saved selection, remap it; otherwise show full-range stats.
+        if (hasUserSelection && selectedStartTs != null && selectedEndTs != null) {
           selectedStartIdx = findClosestIndexForTs(selectedStartTs);
           selectedEndIdx = findClosestIndexForTs(selectedEndTs);
           updateSelectionStats(selectedStartIdx, selectedEndIdx);
         } else {
-          // Default to full-range selection when nothing is selected
-          selectedStartIdx = 0;
-          selectedEndIdx = densePowers.length - 1;
-          selectedStartTs = denseTimestamps[0];
-          selectedEndTs = denseTimestamps[denseTimestamps.length - 1];
-          updateSelectionStats(selectedStartIdx, selectedEndIdx);
+          updateSelectionStats(0, densePowers.length - 1);
         }
 
         chart.draw();
@@ -1147,12 +1152,17 @@
       const s = Math.max(0, Math.min(dragStartIdx, dragEndIdx));
       const e = Math.min(densePowers.length - 1, Math.max(dragStartIdx, dragEndIdx));
 
-      // tiny drag -> clear selection
+      // tiny drag -> clear user selection and revert to full-range stats
       if (Math.abs(e - s) < 2) {
+        hasUserSelection = false;
         selectedStartTs = selectedEndTs = null;
         selectedStartIdx = selectedEndIdx = null;
         dragStartIdx = dragEndIdx = null;
-        updateSelectionStats(null, null);
+        if (densePowers.length) {
+          updateSelectionStats(0, densePowers.length - 1);
+        } else {
+          updateSelectionStats(null, null);
+        }
         chart.draw();
         return;
       }
@@ -1161,6 +1171,7 @@
       selectedEndIdx = e;
       selectedStartTs = denseTimestamps[s];
       selectedEndTs = denseTimestamps[e];
+      hasUserSelection = true;
 
       dragStartIdx = dragEndIdx = null;
       updateSelectionStats(selectedStartIdx, selectedEndIdx);
@@ -1217,6 +1228,7 @@
       let cpuIsDragging = false;
       let cpuDragStartIdx = null;
       let cpuDragEndIdx = null;
+      let cpuHasUserSelection = false;
 
       function cpuMean(arr) {
         if (!arr.length) return null;
@@ -1323,7 +1335,9 @@
             ctx.restore();
           }
 
-          drawBand(cpuSelectedStartIdx, cpuSelectedEndIdx, 'rgba(59,130,246,0.18)');
+          if (cpuHasUserSelection) {
+            drawBand(cpuSelectedStartIdx, cpuSelectedEndIdx, 'rgba(59,130,246,0.18)');
+          }
           if (cpuIsDragging) {
             drawBand(cpuDragStartIdx, cpuDragEndIdx, 'rgba(96,165,250,0.3)');
           }
@@ -1340,8 +1354,8 @@
             {
               label: 'CPU power (W)',
               data: [],
-              borderColor: '#f97316',
-              backgroundColor: 'rgba(249,115,22,0.15)',
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59,130,246,0.18)',
               borderWidth: 2,
               pointRadius: 0,
               tension: 0.25,
@@ -1416,17 +1430,17 @@
           }
 
           cpuUpdateQuarterStats();
-          if (cpuSelectedStartTs != null && cpuSelectedEndTs != null) {
+          if (cpuHasUserSelection && cpuSelectedStartTs != null && cpuSelectedEndTs != null) {
             cpuSelectedStartIdx = cpuFindClosestIndexForTs(cpuSelectedStartTs);
             cpuSelectedEndIdx = cpuFindClosestIndexForTs(cpuSelectedEndTs);
             cpuUpdateSelectionStats(cpuSelectedStartIdx, cpuSelectedEndIdx);
           } else {
-            // Default full-range selection by default
-            cpuSelectedStartIdx = 0;
-            cpuSelectedEndIdx = cpuPowers.length - 1;
-            cpuSelectedStartTs = cpuTimestamps[0];
-            cpuSelectedEndTs = cpuTimestamps[cpuTimestamps.length - 1];
-            cpuUpdateSelectionStats(cpuSelectedStartIdx, cpuSelectedEndIdx);
+            // No explicit user selection: show full-range stats and keep them updated
+            if (cpuPowers.length) {
+              cpuUpdateSelectionStats(0, cpuPowers.length - 1);
+            } else {
+              cpuUpdateSelectionStats(null, null);
+            }
           }
 
           cpuChart.draw();
@@ -1466,10 +1480,16 @@
         const e = Math.min(cpuPowers.length - 1, Math.max(cpuDragStartIdx, cpuDragEndIdx));
 
         if (Math.abs(e - s) < 2) {
+          // clear user selection and revert to full-range stats
+          cpuHasUserSelection = false;
           cpuSelectedStartTs = cpuSelectedEndTs = null;
           cpuSelectedStartIdx = cpuSelectedEndIdx = null;
           cpuDragStartIdx = cpuDragEndIdx = null;
-          cpuUpdateSelectionStats(null, null);
+          if (cpuPowers.length) {
+            cpuUpdateSelectionStats(0, cpuPowers.length - 1);
+          } else {
+            cpuUpdateSelectionStats(null, null);
+          }
           cpuChart.draw();
           return;
         }
@@ -1478,6 +1498,7 @@
         cpuSelectedEndIdx = e;
         cpuSelectedStartTs = cpuTimestamps[s];
         cpuSelectedEndTs = cpuTimestamps[e];
+        cpuHasUserSelection = true;
         cpuDragStartIdx = cpuDragEndIdx = null;
         cpuUpdateSelectionStats(cpuSelectedStartIdx, cpuSelectedEndIdx);
         cpuChart.draw();
@@ -1533,6 +1554,7 @@
       let gpuIsDragging = false;
       let gpuDragStartIdx = null;
       let gpuDragEndIdx = null;
+      let gpuHasUserSelection = false;
 
       function gpuMean(arr) {
         if (!arr.length) return null;
@@ -1639,7 +1661,9 @@
             ctx.restore();
           }
 
-          drawBand(gpuSelectedStartIdx, gpuSelectedEndIdx, 'rgba(59,130,246,0.18)');
+          if (gpuHasUserSelection) {
+            drawBand(gpuSelectedStartIdx, gpuSelectedEndIdx, 'rgba(59,130,246,0.18)');
+          }
           if (gpuIsDragging) {
             drawBand(gpuDragStartIdx, gpuDragEndIdx, 'rgba(96,165,250,0.3)');
           }
@@ -1656,8 +1680,8 @@
             {
               label: 'GPU power (W)',
               data: [],
-              borderColor: '#a855f7',
-              backgroundColor: 'rgba(168,85,247,0.15)',
+              borderColor: '#ef4444',
+              backgroundColor: 'rgba(239,68,68,0.18)',
               borderWidth: 2,
               pointRadius: 0,
               tension: 0.25,
@@ -1732,17 +1756,17 @@
           }
 
           gpuUpdateQuarterStats();
-          if (gpuSelectedStartTs != null && gpuSelectedEndTs != null) {
+          if (gpuHasUserSelection && gpuSelectedStartTs != null && gpuSelectedEndTs != null) {
             gpuSelectedStartIdx = gpuFindClosestIndexForTs(gpuSelectedStartTs);
             gpuSelectedEndIdx = gpuFindClosestIndexForTs(gpuSelectedEndTs);
             gpuUpdateSelectionStats(gpuSelectedStartIdx, gpuSelectedEndIdx);
           } else {
-            // Default full-range selection
-            gpuSelectedStartIdx = 0;
-            gpuSelectedEndIdx = gpuPowers.length - 1;
-            gpuSelectedStartTs = gpuTimestamps[0];
-            gpuSelectedEndTs = gpuTimestamps[gpuTimestamps.length - 1];
-            gpuUpdateSelectionStats(gpuSelectedStartIdx, gpuSelectedEndIdx);
+            // No explicit user selection: show full-range stats and keep them updated
+            if (gpuPowers.length) {
+              gpuUpdateSelectionStats(0, gpuPowers.length - 1);
+            } else {
+              gpuUpdateSelectionStats(null, null);
+            }
           }
 
           gpuChart.draw();
@@ -1782,10 +1806,16 @@
         const e = Math.min(gpuPowers.length - 1, Math.max(gpuDragStartIdx, gpuDragEndIdx));
 
         if (Math.abs(e - s) < 2) {
+          // clear user selection and revert to full-range stats
+          gpuHasUserSelection = false;
           gpuSelectedStartTs = gpuSelectedEndTs = null;
           gpuSelectedStartIdx = gpuSelectedEndIdx = null;
           gpuDragStartIdx = gpuDragEndIdx = null;
-          gpuUpdateSelectionStats(null, null);
+          if (gpuPowers.length) {
+            gpuUpdateSelectionStats(0, gpuPowers.length - 1);
+          } else {
+            gpuUpdateSelectionStats(null, null);
+          }
           gpuChart.draw();
           return;
         }
@@ -1794,6 +1824,7 @@
         gpuSelectedEndIdx = e;
         gpuSelectedStartTs = gpuTimestamps[s];
         gpuSelectedEndTs = gpuTimestamps[e];
+        gpuHasUserSelection = true;
         gpuDragStartIdx = gpuDragEndIdx = null;
         gpuUpdateSelectionStats(gpuSelectedStartIdx, gpuSelectedEndIdx);
         gpuChart.draw();
