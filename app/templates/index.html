@@ -32,21 +32,38 @@
     }
     main {
       padding: 1rem 1.25rem;
-      max-width: 1100px;
+      max-width: 1200px;
       margin: 0 auto;
+      display: flex;
+      flex-direction: row;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+    .dashboard-panel {
+      flex: 1 1 420px;
+      min-width: 340px;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      min-height: 420px;
     }
     .card {
       background: radial-gradient(circle at top, #111827 0, #020617 55%);
       border: 1px solid #1f2937;
       border-radius: 0.5rem;
-      padding: 1rem;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
+      padding: 0.75rem 1rem 0.5rem 1rem;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.65);
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4rem;
       font-size: 0.85rem;
       color: #9ca3af;
     }
@@ -61,19 +78,21 @@
     }
     .chart-container {
       position: relative;
-      height: 60vh;
-      min-height: 280px;
+      height: 220px;
+      min-height: 120px;
+      margin-bottom: 0.5rem;
     }
     canvas {
-      max-height: 60vh;
+      max-height: 220px;
+      min-height: 120px;
     }
     .stats {
-      margin-top: 1rem;
+      margin-top: 0.5rem;
       font-size: 0.8rem;
       color: #9ca3af;
       display: grid;
-      grid-template-columns: 1.5fr 1.2fr;
-      gap: 1rem;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 0.7rem;
     }
     .stats-section-title {
       font-size: 0.75rem;
@@ -123,7 +142,8 @@
     <span><span class="indicator"></span>capturing</span>
   </header>
   <main>
-    <section class="card">
+    <section class="dashboard-panel">
+      <div class="card">
       <div class="card-header">
         <div>Battery power (W) &mdash; last 24 hours</div>
         <div id="last-updated">last update: &mdash;</div>
@@ -178,9 +198,365 @@
         </div>
       </div>
     </section>
+    <section class="dashboard-panel">
+      <div class="card">
+        <div class="card-header">
+          <div>Battery charge (Wh, % of full) &mdash; last 24 hours</div>
+          <div id="charge-last-updated">last update: &mdash;</div>
+        </div>
+        <div class="chart-container">
+          <canvas id="chargeChart"></canvas>
+        </div>
+        <div class="stats">
+          <div>
+            <div class="stats-section-title">Last 24h &mdash; 4 quarters (avg %)</div>
+            <div class="stats-grid">
+              <div class="stat-block"><div class="stat-label">Q1</div><div class="stat-value" id="charge-q1-avg">–</div></div>
+              <div class="stat-block"><div class="stat-label">Q2</div><div class="stat-value" id="charge-q2-avg">–</div></div>
+              <div class="stat-block"><div class="stat-label">Q3</div><div class="stat-value" id="charge-q3-avg">–</div></div>
+              <div class="stat-block"><div class="stat-label">Q4</div><div class="stat-value" id="charge-q4-avg">–</div></div>
+            </div>
+          </div>
+          <div>
+            <div class="stats-section-title">Selection &mdash; click + drag on graph</div>
+            <div class="selection-range" id="charge-sel-range">no selection</div>
+            <div class="stat-block" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0.5rem;">
+              <div>
+                <div class="stat-label">Min (%)</div>
+                <div class="stat-value" id="charge-sel-min">–</div>
+              </div>
+              <div>
+                <div class="stat-label">Mean (%)</div>
+                <div class="stat-value" id="charge-sel-mean">–</div>
+              </div>
+              <div>
+                <div class="stat-label">Max (%)</div>
+                <div class="stat-value" id="charge-sel-max">–</div>
+              </div>
+              <div>
+                <div class="stat-label">Slope</div>
+                <div class="stat-value" id="charge-sel-slope">–</div>
+              </div>
+            </div>
+            <div class="selection-hint">
+              Drag horizontally across the graph to highlight and get stats. Slope is in %/hr and Wh/hr.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script>
+        // --- Battery Charge Panel JS ---
+        const chargeCanvasEl = document.getElementById('chargeChart');
+        const chargeCtx = chargeCanvasEl.getContext('2d');
+        let chargeTimestamps = [];
+        let chargeWhs = [];
+        let chargeFulls = [];
+        let chargePercents = [];
+        // selection for charge
+        let chargeSelectedStartTs = null;
+        let chargeSelectedEndTs = null;
+        let chargeSelectedStartIdx = null;
+        let chargeSelectedEndIdx = null;
+        let chargeIsDragging = false;
+        let chargeDragStartIdx = null;
+        let chargeDragEndIdx = null;
+
+        function formatPercent(v) {
+          if (v === null || Number.isNaN(v)) return '–';
+          return v.toFixed(1);
+        }
+        function formatWh(v) {
+          if (v === null || Number.isNaN(v)) return '–';
+          return v.toFixed(2);
+        }
+        function updateChargeQuarterStats() {
+          const qEls = [
+            document.getElementById('charge-q1-avg'),
+            document.getElementById('charge-q2-avg'),
+            document.getElementById('charge-q3-avg'),
+            document.getElementById('charge-q4-avg')
+          ];
+          if (!chargePercents.length) {
+            qEls.forEach(el => el.textContent = '–');
+            return;
+          }
+          const n = chargePercents.length;
+          const base = Math.floor(n / 4) || 1;
+          const boundaries = [0, Math.min(base, n), Math.min(base*2, n), Math.min(base*3, n), n];
+          for (let i = 0; i < 4; i++) {
+            const start = boundaries[i];
+            const end = boundaries[i+1];
+            const slice = chargePercents.slice(start, end);
+            qEls[i].textContent = slice.length ? formatPercent(mean(slice)) : '–';
+          }
+        }
+        function updateChargeSelectionStats(startIdx, endIdx) {
+          const rangeEl = document.getElementById('charge-sel-range');
+          const minEl = document.getElementById('charge-sel-min');
+          const meanEl = document.getElementById('charge-sel-mean');
+          const maxEl = document.getElementById('charge-sel-max');
+          const slopeEl = document.getElementById('charge-sel-slope');
+          if (!chargePercents.length || startIdx == null || endIdx == null) {
+            rangeEl.textContent = 'no selection';
+            minEl.textContent = meanEl.textContent = maxEl.textContent = slopeEl.textContent = '–';
+            return;
+          }
+          const s = Math.max(0, Math.min(startIdx, endIdx));
+          const e = Math.min(chargePercents.length - 1, Math.max(startIdx, endIdx));
+          if (e <= s) {
+            rangeEl.textContent = 'no selection';
+            minEl.textContent = meanEl.textContent = maxEl.textContent = slopeEl.textContent = '–';
+            return;
+          }
+          const subPercents = chargePercents.slice(s, e + 1);
+          const subWhs = chargeWhs.slice(s, e + 1);
+          const tsStart = chargeTimestamps[s];
+          const tsEnd = chargeTimestamps[e];
+          const minV = Math.min(...subPercents);
+          const maxV = Math.max(...subPercents);
+          const meanV = mean(subPercents);
+          // Slope calculation
+          const dt = (tsEnd - tsStart) / 3600; // hours
+          let slopeStr = '–';
+          if (dt > 0.01) {
+            const dPercent = subPercents[subPercents.length-1] - subPercents[0];
+            const dWh = subWhs[subWhs.length-1] - subWhs[0];
+            slopeStr = `${formatPercent(dPercent/dt)}%/hr, ${formatWh(dWh/dt)} Wh/hr`;
+          }
+          rangeEl.textContent = `${formatTime(tsStart)} → ${formatTime(tsEnd)}`;
+          minEl.textContent = formatPercent(minV);
+          meanEl.textContent = formatPercent(meanV);
+          maxEl.textContent = formatPercent(maxV);
+          slopeEl.textContent = slopeStr;
+        }
+        function chargeFindClosestIndexForTs(ts) {
+          if (!chargeTimestamps.length || ts == null) return null;
+          let bestIdx = 0;
+          let bestDiff = Math.abs(chargeTimestamps[0] - ts);
+          for (let i = 1; i < chargeTimestamps.length; i++) {
+            const d = Math.abs(chargeTimestamps[i] - ts);
+            if (d < bestDiff) {
+              bestDiff = d;
+              bestIdx = i;
+            }
+          }
+          return bestIdx;
+        }
+        const chargeSelectionPlugin = {
+          id: 'chargeSelectionHighlight',
+          beforeDraw(chart) {
+            const xScale = chart.scales.x;
+            const { ctx, chartArea } = chart;
+            if (!xScale || !chartArea) return;
+            const { top, bottom } = chartArea;
+            function drawBand(startIdx, endIdx, color) {
+              if (startIdx == null || endIdx == null) return;
+              const s = Math.max(0, Math.min(startIdx, endIdx));
+              const e = Math.min(chargePercents.length - 1, Math.max(startIdx, endIdx));
+              if (e <= s) return;
+              const x1 = xScale.getPixelForValue(s);
+              const x2 = xScale.getPixelForValue(e);
+              ctx.save();
+              ctx.fillStyle = color;
+              ctx.fillRect(x1, top, x2 - x1, bottom - top);
+              ctx.restore();
+            }
+            drawBand(chargeSelectedStartIdx, chargeSelectedEndIdx, 'rgba(59,130,246,0.18)');
+            if (chargeIsDragging) {
+              drawBand(chargeDragStartIdx, chargeDragEndIdx, 'rgba(96,165,250,0.3)');
+            }
+          }
+        };
+        Chart.register(chargeSelectionPlugin);
+        const chargeChart = new Chart(chargeCtx, {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label: 'Charge (Wh)',
+                data: [],
+                borderColor: '#38bdf8',
+                backgroundColor: 'rgba(56,189,248,0.15)',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.25,
+                yAxisID: 'y',
+              },
+              {
+                label: 'Charge (%)',
+                data: [],
+                borderColor: '#fbbf24',
+                backgroundColor: 'rgba(251,191,36,0.10)',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.25,
+                yAxisID: 'y1',
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                ticks: {
+                  color: '#6b7280',
+                  maxTicksLimit: 8,
+                  callback: (value) => {
+                    const label = chargeChart.data.labels[value];
+                    return label || '';
+                  }
+                },
+                grid: { color: 'rgba(31,41,55,0.4)' }
+              },
+              y: {
+                type: 'linear',
+                position: 'left',
+                title: { display: true, text: 'Wh', color: '#38bdf8' },
+                ticks: { color: '#38bdf8' },
+                grid: { color: 'rgba(31,41,55,0.4)' }
+              },
+              y1: {
+                type: 'linear',
+                position: 'right',
+                title: { display: true, text: '%', color: '#fbbf24' },
+                ticks: { color: '#fbbf24' },
+                grid: { drawOnChartArea: false }
+              }
+            },
+            plugins: {
+              legend: { labels: { color: '#9ca3af' } }
+            }
+          }
+        });
+        async function fetchChargeData() {
+          try {
+            const res = await fetch('/api/charge24');
+            const json = await res.json();
+            let timestamps = (json.timestamps || []).map(Number);
+            let whs = (json.charge || []).map(Number);
+            let fulls = (json.full || []).map(Number);
+            // percent = charge / full * 100
+            let percents = whs.map((v, i) => (fulls[i] ? (v / fulls[i]) * 100 : null));
+            // sort by time
+            const zipped = timestamps.map((t, i) => [t, whs[i], fulls[i], percents[i]])
+              .filter(([t, v, f, p]) => Number.isFinite(t) && Number.isFinite(v) && Number.isFinite(f) && Number.isFinite(p))
+              .sort((a, b) => a[0] - b[0]);
+            if (!zipped.length) {
+              chargeTimestamps = [];
+              chargeWhs = [];
+              chargeFulls = [];
+              chargePercents = [];
+              chargeChart.data.labels = [];
+              chargeChart.data.datasets[0].data = [];
+              chargeChart.data.datasets[1].data = [];
+              chargeChart.update('none');
+              updateChargeQuarterStats();
+              updateChargeSelectionStats(null, null);
+              document.getElementById('charge-last-updated').textContent = 'last update: no data yet';
+              return;
+            }
+            chargeTimestamps = zipped.map(p => p[0]);
+            chargeWhs = zipped.map(p => p[1]);
+            chargeFulls = zipped.map(p => p[2]);
+            chargePercents = zipped.map(p => p[3]);
+            const labels = chargeTimestamps.map(ts => formatTime(ts));
+            chargeChart.data.labels = labels;
+            chargeChart.data.datasets[0].data = chargeWhs;
+            chargeChart.data.datasets[1].data = chargePercents;
+            chargeChart.update('none');
+            const lastTs = chargeTimestamps[chargeTimestamps.length - 1];
+            const lastUpdated = document.getElementById('charge-last-updated');
+            if (lastTs) {
+              lastUpdated.textContent = 'last update: ' + new Date(lastTs * 1000).toLocaleTimeString();
+            } else {
+              lastUpdated.textContent = 'last update: no data yet';
+            }
+            updateChargeQuarterStats();
+            if (chargeSelectedStartTs != null && chargeSelectedEndTs != null) {
+              chargeSelectedStartIdx = chargeFindClosestIndexForTs(chargeSelectedStartTs);
+              chargeSelectedEndIdx = chargeFindClosestIndexForTs(chargeSelectedEndTs);
+              updateChargeSelectionStats(chargeSelectedStartIdx, chargeSelectedEndIdx);
+            } else {
+              updateChargeSelectionStats(null, null);
+            }
+            chargeChart.draw();
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        fetchChargeData();
+        setInterval(fetchChargeData, 5000);
+        function chargeGetRelativeX(evt) {
+          const rect = chargeCanvasEl.getBoundingClientRect();
+          return evt.clientX - rect.left;
+        }
+        function chargeIndexFromX(x) {
+          const xScale = chargeChart.scales.x;
+          if (!xScale) return null;
+          let v = xScale.getValueForPixel(x);
+          if (!isFinite(v)) return null;
+          v = Math.round(v);
+          v = Math.max(0, Math.min(chargePercents.length - 1, v));
+          return v;
+        }
+        function chargeFinishDrag() {
+          if (!chargeIsDragging) return;
+          chargeIsDragging = false;
+          if (chargeDragStartIdx == null || chargeDragEndIdx == null) {
+            chargeDragStartIdx = chargeDragEndIdx = null;
+            return;
+          }
+          const s = Math.max(0, Math.min(chargeDragStartIdx, chargeDragEndIdx));
+          const e = Math.min(chargePercents.length - 1, Math.max(chargeDragStartIdx, chargeDragEndIdx));
+          if (Math.abs(e - s) < 2) {
+            chargeSelectedStartTs = chargeSelectedEndTs = null;
+            chargeSelectedStartIdx = chargeSelectedEndIdx = null;
+            chargeDragStartIdx = chargeDragEndIdx = null;
+            updateChargeSelectionStats(null, null);
+            chargeChart.draw();
+            return;
+          }
+          chargeSelectedStartIdx = s;
+          chargeSelectedEndIdx = e;
+          chargeSelectedStartTs = chargeTimestamps[s];
+          chargeSelectedEndTs = chargeTimestamps[e];
+          chargeDragStartIdx = chargeDragEndIdx = null;
+          updateChargeSelectionStats(chargeSelectedStartIdx, chargeSelectedEndIdx);
+          chargeChart.draw();
+        }
+        chargeCanvasEl.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          if (!chargePercents.length) return;
+          chargeIsDragging = true;
+          const x = chargeGetRelativeX(e);
+          const idx = chargeIndexFromX(x);
+          chargeDragStartIdx = chargeDragEndIdx = idx;
+          chargeChart.draw();
+        });
+        chargeCanvasEl.addEventListener('mousemove', (e) => {
+          e.preventDefault();
+          if (!chargeIsDragging) return;
+          const x = chargeGetRelativeX(e);
+          const idx = chargeIndexFromX(x);
+          chargeDragEndIdx = idx;
+          chargeChart.draw();
+        });
+        chargeCanvasEl.addEventListener('mouseup', (e) => {
+          e.preventDefault();
+          chargeFinishDrag();
+        });
+        chargeCanvasEl.addEventListener('mouseleave', (e) => {
+          e.preventDefault();
+          if (chargeIsDragging) chargeFinishDrag();
+        });
+        chargeCanvasEl.addEventListener('dragstart', (e) => {
+          e.preventDefault();
+        });
     const canvasEl = document.getElementById('powerChart');
     const ctx = canvasEl.getContext('2d');
 
@@ -498,6 +874,7 @@
     }
 
     canvasEl.addEventListener('mousedown', (e) => {
+      e.preventDefault();
       if (!densePowers.length) return;
       isDragging = true;
       const x = getRelativeX(e);
@@ -507,6 +884,7 @@
     });
 
     canvasEl.addEventListener('mousemove', (e) => {
+      e.preventDefault();
       if (!isDragging) return;
       const x = getRelativeX(e);
       const idx = indexFromX(x);
@@ -514,12 +892,19 @@
       chart.draw();
     });
 
-    canvasEl.addEventListener('mouseup', () => {
+    canvasEl.addEventListener('mouseup', (e) => {
+      e.preventDefault();
       finishDrag();
     });
 
-    canvasEl.addEventListener('mouseleave', () => {
+    canvasEl.addEventListener('mouseleave', (e) => {
+      e.preventDefault();
       if (isDragging) finishDrag();
+    });
+
+    // Prevent drag and drop image behavior on the canvas
+    canvasEl.addEventListener('dragstart', (e) => {
+      e.preventDefault();
     });
   </script>
 </body>

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-APP_NAME="batttracker-flask-app"
+APP_NAME="batttracker"
 INSTALL_DIR="/opt/$APP_NAME"
 SERVICE_FILE="batttracker.service"
 BACKEND_SERVICE_FILE="batttracker-backend.service"
