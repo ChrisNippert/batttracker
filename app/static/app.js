@@ -65,6 +65,32 @@ document.addEventListener('DOMContentLoaded', () => {
   updateBatteryStatusBar();
   setInterval(updateBatteryStatusBar, 10000);
 
+  // Downsample series to ~targetBuckets points by averaging contiguous buckets.
+  function downsampleByMean(timestamps, valueArrays, targetBuckets = 100) {
+    if (!timestamps || timestamps.length === 0) {
+      return { timestamps, values: valueArrays };
+    }
+    const n = timestamps.length;
+    if (n <= targetBuckets) {
+      return { timestamps, values: valueArrays };
+    }
+    const bucketSize = Math.ceil(n / targetBuckets);
+    const newT = [];
+    const newVals = valueArrays.map(() => []);
+    for (let i = 0; i < n; i += bucketSize) {
+      const end = Math.min(i + bucketSize, n);
+      const sliceT = timestamps.slice(i, end);
+      const tAvg = sliceT.reduce((a, b) => a + b, 0) / sliceT.length;
+      newT.push(tAvg);
+      valueArrays.forEach((arr, idx) => {
+        const sliceV = arr.slice(i, end);
+        const m = sliceV.reduce((a, b) => a + b, 0) / sliceV.length;
+        newVals[idx].push(m);
+      });
+    }
+    return { timestamps: newT, values: newVals };
+  }
+
   // --- Battery Charge Panel JS ---
   const chargeCanvasEl = document.getElementById('chargeChart');
   const chargeCtx = chargeCanvasEl.getContext('2d');
@@ -146,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const chargeSelectionPlugin = {
     id: 'chargeSelectionHighlight',
     beforeDraw(chart) {
+      if (!chart.canvas || chart.canvas !== chargeCanvasEl) return;
       const xScale = chart.scales.x;
       const { ctx, chartArea } = chart;
       if (!xScale || !chartArea) return;
@@ -302,10 +329,13 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('charge-last-updated').textContent = 'last update: no data yet';
         return;
       }
-      chargeTimestamps = zipped.map(p => p[0]);
-      chargeWhs = zipped.map(p => p[1]);
-      chargeFulls = zipped.map(p => p[2]);
-      chargePercents = zipped.map(p => p[3]);
+      let tsArr = zipped.map(p => p[0]);
+      let whArr = zipped.map(p => p[1]);
+      let fullArr = zipped.map(p => p[2]);
+      let pctArr = zipped.map(p => p[3]);
+      const ds = downsampleByMean(tsArr, [whArr, fullArr, pctArr]);
+      chargeTimestamps = ds.timestamps;
+      [chargeWhs, chargeFulls, chargePercents] = ds.values;
       const labels = chargeTimestamps.map(ts => formatTime(ts));
       chargeChart.data.labels = labels;
       chargeChart.data.datasets[0].data = chargeWhs;
@@ -550,6 +580,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectionPlugin = {
     id: 'selectionHighlight',
     beforeDraw(chart) {
+      if (!chart.canvas || chart.canvas !== canvasEl) return;
       const xScale = chart.scales.x;
       const { ctx, chartArea } = chart;
       if (!xScale || !chartArea) return;
@@ -673,6 +704,10 @@ document.addEventListener('DOMContentLoaded', () => {
         denseTimestamps.push(currT);
         densePowers.push(currV);
       }
+
+      const ds2 = downsampleByMean(denseTimestamps, [densePowers]);
+      denseTimestamps = ds2.timestamps;
+      [densePowers] = ds2.values;
 
       const labels = denseTimestamps.map(ts => formatTime(ts));
       chart.data.labels = labels;
@@ -900,6 +935,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cpuSelectionPlugin = {
       id: 'cpuSelectionHighlight',
       beforeDraw(chart) {
+        if (!chart.canvas || chart.canvas !== cpuCanvasEl) return;
         const xScale = chart.scales.x;
         const { ctx, chartArea } = chart;
         if (!xScale || !chartArea) return;
@@ -995,8 +1031,11 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        cpuTimestamps = zipped.map((p) => p[0]);
-        cpuPowers = zipped.map((p) => p[1]);
+        let cpuTsArr = zipped.map((p) => p[0]);
+        let cpuPowArr = zipped.map((p) => p[1]);
+        const cpuDs = downsampleByMean(cpuTsArr, [cpuPowArr]);
+        cpuTimestamps = cpuDs.timestamps;
+        [cpuPowers] = cpuDs.values;
         const labels = cpuTimestamps.map((ts) => cpuFormatTime(ts));
         cpuChart.data.labels = labels;
         cpuChart.data.datasets[0].data = cpuPowers;
@@ -1226,6 +1265,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const gpuSelectionPlugin = {
       id: 'gpuSelectionHighlight',
       beforeDraw(chart) {
+        if (!chart.canvas || chart.canvas !== gpuCanvasEl) return;
         const xScale = chart.scales.x;
         const { ctx, chartArea } = chart;
         if (!xScale || !chartArea) return;
@@ -1301,8 +1341,8 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const res = await fetch('/api/gpu24');
         const json = await res.json();
-        let timestamps = (json.timestamps || []).map(Number);
-        let powers = (json.powers || []).map(Number);
+          let timestamps = (json.timestamps || []).map(Number);
+          let powers = (json.powers || []).map(Number);
         const zipped = timestamps
           .map((t, i) => [t, powers[i]])
           .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v))
@@ -1321,8 +1361,11 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        gpuTimestamps = zipped.map((p) => p[0]);
-        gpuPowers = zipped.map((p) => p[1]);
+          let gpuTsArr = zipped.map((p) => p[0]);
+          let gpuPowArr = zipped.map((p) => p[1]);
+          const gpuDs = downsampleByMean(gpuTsArr, [gpuPowArr]);
+          gpuTimestamps = gpuDs.timestamps;
+          [gpuPowers] = gpuDs.values;
         const labels = gpuTimestamps.map((ts) => gpuFormatTime(ts));
         gpuChart.data.labels = labels;
         gpuChart.data.datasets[0].data = gpuPowers;

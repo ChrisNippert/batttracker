@@ -235,6 +235,10 @@ canvas {
     .stats-grid {
         grid-template-columns: 1fr;
     }
+    /* In small mode, show battery stats in three columns */
+    #stats-panel .stats-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 @media (max-width: 640px) {
     #charts-grid {
