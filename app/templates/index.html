@@ -5,14 +5,18 @@
   <title>Battery Power Tracker</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    html,
+    body {
+      height: 100%;
+    }
     body {
       margin: 0;
       font-family: system-ui, sans-serif;
       background: #111827;
       color: #e5e7eb;
-      min-height: 100vh;
       display: flex;
       flex-direction: column;
+      overflow: hidden; /* disable page scrolling */
     }
     header {
       padding: 0.5rem 1.1rem 0.5rem 0;
@@ -30,7 +34,7 @@
       color: #9ca3af;
     }
     main {
-      padding: 0.3rem 1.1rem 0.75rem 0;
+      padding: 0.3rem 1.1rem 0 0;
       max-width: none;
       margin: 0;
       display: grid;
@@ -39,7 +43,6 @@
       row-gap: 1.1rem;
       align-items: stretch;
       flex: 1 1 auto;
-      min-height: calc(100vh - 3rem);
     }
     .dashboard-panel {
       display: flex;
@@ -170,7 +173,7 @@
       column-gap: 1.1rem;
       align-items: start;
       max-width: 1350px;
-      margin: 0.4rem auto 0;
+      margin: 0.4rem auto 0.75rem;
       height: 100%;
     }
     #charge-panel {

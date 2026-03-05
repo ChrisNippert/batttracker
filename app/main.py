@@ -1,44 +1,59 @@
 import time
-import threading
 import pandas as pd
 from flask import Flask, jsonify, render_template
 
-import sys
+import os
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 DATA_DIR = "data"
-BATTERY_NAME = "BAT0"
+
+battery_name = None
+# check if "BAT0" exists. if not, check for "CMB0"
+# if neither exist, just have battery_name = none
+if os.path.exists("/sys/class/power_supply/BAT0"):
+    battery_name = "BAT0"
+elif os.path.exists("/sys/class/power_supply/CMB0"):
+    battery_name = "CMB0"
+
 # RAPL energy counters (microjoules). Paths may vary slightly by platform.
-CPU_ENERGY_PATH = "/sys/class/powercap/intel-rapl:0/energy_uj"
-GPU_ENERGY_PATH = "/sys/class/powercap/intel-rapl:0:1/energy_uj"
+cpu_energy_path = None
+if os.path.exists("/sys/class/powercap/intel-rapl:0/energy_uj"):
+    cpu_energy_path = "/sys/class/powercap/intel-rapl:0/energy_uj"
+
+gpu_energy_path = None
+if os.path.exists("/sys/class/powercap/intel-rapl:0:1/energy_uj"):
+    gpu_energy_path = "/sys/class/powercap/intel-rapl:0:1/energy_uj"
 
 def read_battery_power():
-    print(f"Opening /sys/class/power_supply/{BATTERY_NAME}/power_now to read battery power")
-    with open(f"/sys/class/power_supply/{BATTERY_NAME}/power_now", "r") as f:
+    with open(f"/sys/class/power_supply/{battery_name}/power_now", "r") as f:
         power = int(f.read().strip())
     return power / 1_000_000
 
 def read_battery_charge():
     # returns tuple of (current_charge, full_charge)
-    with open(f"/sys/class/power_supply/{BATTERY_NAME}/energy_full", "r") as f:
+    with open(f"/sys/class/power_supply/{battery_name}/energy_full", "r") as f:
         full = int(f.read().strip())
-    with open(f"/sys/class/power_supply/{BATTERY_NAME}/energy_full_design", "r") as f:
+    with open(f"/sys/class/power_supply/{battery_name}/energy_full_design", "r") as f:
         full_design = int(f.read().strip())
-    with open(f"/sys/class/power_supply/{BATTERY_NAME}/energy_now", "r") as f:
+    with open(f"/sys/class/power_supply/{battery_name}/energy_now", "r") as f:
         current = int(f.read().strip())
     return current / 1_000_000, full / 1_000_000, full_design / 1_000_000
 
 
 def read_cpu_energy_uj():
     """Read package energy counter in microjoules from RAPL, if available."""
-    with open(CPU_ENERGY_PATH, "r") as f:
+    if cpu_energy_path is None:
+        raise Exception("CPU energy path not available")
+    with open(cpu_energy_path, "r") as f:
         return int(f.read().strip())
 
 
 def read_gpu_energy_uj():
     """Read integrated GPU/GT energy counter in microjoules from RAPL, if available."""
-    with open(GPU_ENERGY_PATH, "r") as f:
+    if gpu_energy_path is None:
+        raise Exception("GPU energy path not available")
+    with open(gpu_energy_path, "r") as f:
         return int(f.read().strip())
 
 def cap_data():
@@ -78,6 +93,9 @@ def cap_data():
             cpu_power = None
             gpu_power = None
 
+        if battery_name is None:
+            print("No battery found, skipping data capture")
+            return
         power = read_battery_power()
         charge, full, full_design = read_battery_charge()
         timestamp = int(time.time())
@@ -127,7 +145,7 @@ def get_battery_status():
         except Exception:
             return None
 
-    base = f"/sys/class/power_supply/{BATTERY_NAME}"
+    base = f"/sys/class/power_supply/{battery_name}"
     status = read_file(f"{base}/status") or "Unknown"
     cycles = read_file(f"{base}/cycle_count", int)
     design_capacity = read_file(f"{base}/energy_full_design", int, 1_000_000)
