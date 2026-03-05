@@ -58,6 +58,39 @@ main {
     font-size: 0.85rem;
     color: #9ca3af;
 }
+.poll-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+    background: rgba(15, 23, 42, 0.9);
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    border: 1px solid #1f2937;
+}
+.poll-control label {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.poll-control input[type="number"] {
+    width: 3rem;
+    background: transparent;
+    border: none;
+    color: #e5e7eb;
+    font-size: 0.8rem;
+    text-align: right;
+    outline: none;
+    -moz-appearance: textfield;
+}
+.poll-control input[type="number"]::-webkit-outer-spin-button,
+.poll-control input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.poll-control input[type="number"]:focus {
+    outline: none;
+}
 .chart-container {
     position: relative;
     height: 215px;

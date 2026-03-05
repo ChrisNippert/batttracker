@@ -331,7 +331,9 @@
   canvasEl.addEventListener('dragstart', (e) => {
     e.preventDefault();
   });
-
-  fetchCpuData();
-  setInterval(fetchCpuData, 5000);
+  (async function loop() {
+    await fetchCpuData();
+    const interval = ns.pollIntervalMs || 5000;
+    setTimeout(loop, interval);
+  })();
 })(window.BattApp || (window.BattApp = {}));

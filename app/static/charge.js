@@ -477,6 +477,9 @@
   });
 
   // initial load + polling
-  fetchChargeData();
-  setInterval(fetchChargeData, 5000);
+  (async function loop() {
+    await fetchChargeData();
+    const interval = ns.pollIntervalMs || 5000;
+    setTimeout(loop, interval);
+  })();
 })(window.BattApp || (window.BattApp = {}));

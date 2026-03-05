@@ -8,6 +8,13 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 
 DATA_DIR = "data"
 
+# Sampling / polling interval (seconds). Can be overridden via env var.
+_poll_env = os.environ.get("BATTRACKER_POLL_INTERVAL_S", "5")
+try:
+    POLL_INTERVAL_SECONDS = max(1.0, float(_poll_env))
+except ValueError:
+    POLL_INTERVAL_SECONDS = 5.0
+
 print(f"Starting battery monitor with data directory: {DATA_DIR}")
 battery_name = None
 # check if "BAT0" exists. if not, check for "CMB0"
@@ -247,7 +254,8 @@ def _load_last_24h(prefix, col_names):
     return df
 @app.route("/")
 def index():
-    return render_template("index.html")
+    # Expose polling interval to frontend (milliseconds)
+    return render_template("index.html", poll_interval_ms=int(POLL_INTERVAL_SECONDS * 1000))
 
 
 @app.route("/api/past24")
@@ -314,7 +322,7 @@ def api_status():
 def main():
     while True:
         cap_data()
-        time.sleep(5)
+        time.sleep(POLL_INTERVAL_SECONDS)
 
 if __name__ == "__main__":
     main()

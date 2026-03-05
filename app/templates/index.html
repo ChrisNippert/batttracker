@@ -16,7 +16,10 @@
       <div class="card">
         <div class="card-header">
           <div>Battery info</div>
-          <div></div>
+          <div class="poll-control">
+            <label for="poll-interval-input">Refresh (s)</label>
+            <input id="poll-interval-input" type="number" min="1" max="300" step="1" value="5" />
+          </div>
         </div>
         <div class="stats" style="grid-template-columns: 1fr;">
           <div>
@@ -292,7 +295,42 @@
       </section>
     </div>
   </main>
+  <script>
+    window.BattApp = window.BattApp || {};
+    (function () {
+      const ns = window.BattApp;
+      const serverMs = {{ poll_interval_ms | default(5000, true) }};
+      ns.pollIntervalMs = serverMs || 5000;
 
+      try {
+        const storedSecs = Number(localStorage.getItem('batttracker_poll_secs'));
+        if (Number.isFinite(storedSecs) && storedSecs >= 1) {
+          ns.pollIntervalMs = storedSecs * 1000;
+        }
+      } catch (e) {
+        // ignore storage failures
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const input = document.getElementById('poll-interval-input');
+        if (!input) return;
+        const currentSecs = Math.round((ns.pollIntervalMs || 5000) / 1000);
+        input.value = currentSecs;
+        input.addEventListener('change', () => {
+          let v = Number(input.value);
+          if (!Number.isFinite(v) || v < 1) v = 1;
+          if (v > 300) v = 300;
+          input.value = v;
+          ns.pollIntervalMs = v * 1000;
+          try {
+            localStorage.setItem('batttracker_poll_secs', String(v));
+          } catch (e) {
+            // ignore storage failures
+          }
+        });
+      });
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="{{ url_for('static', filename='core.js') }}"></script>
   <script src="{{ url_for('static', filename='status.js') }}"></script>

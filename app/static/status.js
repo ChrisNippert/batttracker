@@ -63,7 +63,10 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    updateBatteryStatusBar();
-    setInterval(updateBatteryStatusBar, 10000);
+    (async function loop() {
+      await updateBatteryStatusBar();
+      const interval = (ns.pollIntervalMs && ns.pollIntervalMs * 2) || 10000;
+      setTimeout(loop, interval);
+    })();
   });
 })(window.BattApp || (window.BattApp = {}));
