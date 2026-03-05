@@ -274,6 +274,12 @@
       }
 
       chart.draw();
+
+      const currEl = document.getElementById('power-current');
+      if (currEl) {
+        const v = densePowers.length ? densePowers[densePowers.length - 1] : null;
+        currEl.textContent = formatW(v);
+      }
     } catch (e) {
       console.error(e);
     }

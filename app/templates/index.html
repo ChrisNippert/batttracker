@@ -85,6 +85,21 @@
           <div class="chart-container">
             <canvas id="chargeChart"></canvas>
           </div>
+          <div class="stats">
+            <div>
+              <div class="stats-section-title">Current</div>
+              <div class="stats-grid">
+                <div class="stat-block">
+                  <div class="stat-label">Charge (%)</div>
+                  <div class="stat-value" id="charge-current-percent">&ndash;</div>
+                </div>
+                <div class="stat-block">
+                  <div class="stat-label">Charge (Wh)</div>
+                  <div class="stat-value" id="charge-current-wh">&ndash;</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
       <section class="dashboard-panel" id="power-panel">
@@ -98,6 +113,15 @@
           </div>
 
           <div class="stats">
+            <div>
+              <div class="stats-section-title">Current</div>
+              <div class="stats-grid">
+                <div class="stat-block">
+                  <div class="stat-label">Power (W)</div>
+                  <div class="stat-value" id="power-current">&ndash;</div>
+                </div>
+              </div>
+            </div>
             <div>
               <div class="stats-section-title">Quarters (avg W, 24h)</div>
               <div class="stats-grid">
@@ -155,6 +179,15 @@
           </div>
           <div class="stats">
             <div>
+              <div class="stats-section-title">Current</div>
+              <div class="stats-grid">
+                <div class="stat-block">
+                  <div class="stat-label">CPU power (W)</div>
+                  <div class="stat-value" id="cpu-current">&ndash;</div>
+                </div>
+              </div>
+            </div>
+            <div>
               <div class="stats-section-title">Quarters (avg W, 24h)</div>
               <div class="stats-grid">
                 <div class="stat-block">
@@ -210,6 +243,15 @@
             <canvas id="gpuChart"></canvas>
           </div>
           <div class="stats">
+            <div>
+              <div class="stats-section-title">Current</div>
+              <div class="stats-grid">
+                <div class="stat-block">
+                  <div class="stat-label">GPU power (W)</div>
+                  <div class="stat-value" id="gpu-current">&ndash;</div>
+                </div>
+              </div>
+            </div>
             <div>
               <div class="stats-section-title">Quarters (avg W, 24h)</div>
               <div class="stats-grid">

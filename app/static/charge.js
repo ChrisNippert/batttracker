@@ -10,6 +10,9 @@
   let chargeWhs = [];
   let chargeFulls = [];
   let chargePercents = [];
+  let chargeFullDesigns = [];
+  let chargeHealthPercents = [];
+  let chargeCapacityWhs = [];
 
   let chargeSelectedStartTs = null;
   let chargeSelectedEndTs = null;
@@ -126,15 +129,16 @@
         {
           label: 'Charge (Wh)',
           data: [],
-          borderColor: '#38bdf8',
-          backgroundColor: 'rgba(56,189,248,0.15)',
-          borderWidth: 2,
+          borderColor: 'rgba(0,0,0,0)',
+          backgroundColor: 'rgba(0,0,0,0)',
+          borderWidth: 0,
           pointRadius: 0,
           tension: 0.25,
-          yAxisID: 'y'
+          yAxisID: 'y',
+          hidden: true
         },
         {
-          label: 'Charge (%)',
+          label: 'Charge (% of design)',
           data: [],
           borderColor: '#fbbf24',
           backgroundColor: 'rgba(251,191,36,0.10)',
@@ -142,6 +146,39 @@
           pointRadius: 0,
           tension: 0.25,
           yAxisID: 'y1'
+        },
+        {
+          label: 'Health max (%)',
+          data: [],
+          borderColor: '#f97316',
+          borderWidth: 1.5,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          tension: 0,
+          yAxisID: 'y1',
+          fill: false
+        },
+        {
+          label: 'Design 100% line',
+          data: [],
+          borderColor: '#9ca3af',
+          borderWidth: 1,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          tension: 0,
+          yAxisID: 'y1',
+          fill: false
+        },
+        {
+          label: 'Max capacity (Wh)',
+          data: [],
+          borderColor: '#9ca3af',
+          borderWidth: 1.5,
+          borderDash: [5, 3],
+          pointRadius: 0,
+          tension: 0,
+          yAxisID: 'y',
+          fill: false
         }
       ]
     },
@@ -164,6 +201,7 @@
           type: 'linear',
           position: 'left',
           title: { display: true, text: 'Wh', color: '#38bdf8' },
+          min: 0,
           ticks: { color: '#38bdf8' },
           grid: { color: 'rgba(31,41,55,0.4)' }
         },
@@ -171,6 +209,8 @@
           type: 'linear',
           position: 'right',
           title: { display: true, text: '%', color: '#fbbf24' },
+          min: 0,
+          max: 100,
           ticks: { color: '#fbbf24' },
           grid: { drawOnChartArea: false }
         }
@@ -233,21 +273,27 @@
       let timestamps = (json.timestamps || []).map(Number);
       let whs = (json.charge || []).map(Number);
       let fulls = (json.full || []).map(Number);
-      let percents = whs.map((v, i) => (fulls[i] ? (v / fulls[i]) * 100 : null));
+      let fullDesigns = (json.full_design || []).map(Number);
 
       const zipped = timestamps
-        .map((t, i) => [t, whs[i], fulls[i], percents[i]])
-        .filter(([t, v, f, p]) => Number.isFinite(t) && Number.isFinite(v) && Number.isFinite(f) && Number.isFinite(p))
+        .map((t, i) => [t, whs[i], fulls[i], fullDesigns[i]])
+        .filter(([t, v, f, fd]) => Number.isFinite(t) && Number.isFinite(v) && Number.isFinite(f) && Number.isFinite(fd))
         .sort((a, b) => a[0] - b[0]);
 
       if (!zipped.length) {
         chargeTimestamps = [];
         chargeWhs = [];
         chargeFulls = [];
+        chargeFullDesigns = [];
         chargePercents = [];
+        chargeHealthPercents = [];
+        chargeCapacityWhs = [];
         chart.data.labels = [];
         chart.data.datasets[0].data = [];
         chart.data.datasets[1].data = [];
+        chart.data.datasets[2].data = [];
+        chart.data.datasets[3].data = [];
+        chart.data.datasets[4].data = [];
         chart.update('none');
         updateChargeSelectionStats(null, null);
         const lastUpdated = document.getElementById('charge-last-updated');
@@ -258,21 +304,38 @@
       let tsArr = zipped.map((p) => p[0]);
       let whArr = zipped.map((p) => p[1]);
       let fullArr = zipped.map((p) => p[2]);
-      let pctArr = zipped.map((p) => p[3]);
+      let fullDesignArr = zipped.map((p) => p[3]);
 
-      const ds = ns.downsampleByMean(tsArr, [whArr, fullArr, pctArr]);
+      const ds = ns.downsampleByMean(tsArr, [whArr, fullArr, fullDesignArr]);
       chargeTimestamps = ds.timestamps;
-      [chargeWhs, chargeFulls, chargePercents] = ds.values;
+      [chargeWhs, chargeFulls, chargeFullDesigns] = ds.values;
+
+      chargePercents = chargeWhs.map((v, i) => (chargeFullDesigns[i] ? (v / chargeFullDesigns[i]) * 100 : null));
+      chargeHealthPercents = chargeWhs.map((_, i) => (chargeFullDesigns[i] && chargeFulls[i] ? (chargeFulls[i] / chargeFullDesigns[i]) * 100 : null));
+      chargeCapacityWhs = chargeFulls.slice();
 
       const labels = chargeTimestamps.map((ts) => ns.formatTimeShort(ts));
       chart.data.labels = labels;
       chart.data.datasets[0].data = chargeWhs;
       chart.data.datasets[1].data = chargePercents;
+      chart.data.datasets[2].data = chargeHealthPercents;
+      chart.data.datasets[3].data = chargeTimestamps.map(() => 100);
+      chart.data.datasets[4].data = chargeCapacityWhs;
+
+      // Fix Wh axis to [0, max capacity Wh]
+      const capCandidates = chargeCapacityWhs.filter((v) => Number.isFinite(v) && v > 0);
+      if (capCandidates.length && chart.options && chart.options.scales && chart.options.scales.y) {
+        const maxCap = Math.max(...capCandidates);
+        chart.options.scales.y.min = 0;
+        chart.options.scales.y.max = maxCap;
+      }
       chart.update('none');
 
       const percentEl = document.getElementById('battery-stat-percent');
       const nowEl = document.getElementById('battery-stat-now');
       const fullEl = document.getElementById('battery-stat-full');
+      const currPctEl = document.getElementById('charge-current-percent');
+      const currWhEl = document.getElementById('charge-current-wh');
       if (chargePercents.length && percentEl) {
         const lastPct = chargePercents[chargePercents.length - 1];
         percentEl.textContent = Number.isFinite(lastPct) ? formatPercent(lastPct) : '–';
@@ -284,6 +347,15 @@
       if (chargeFulls.length && fullEl) {
         const lastFullWh = chargeFulls[chargeFulls.length - 1];
         fullEl.textContent = Number.isFinite(lastFullWh) ? formatWh(lastFullWh) : '–';
+      }
+
+      if (currPctEl) {
+        const lastPct = chargePercents.length ? chargePercents[chargePercents.length - 1] : null;
+        currPctEl.textContent = Number.isFinite(lastPct) ? formatPercent(lastPct) : '–';
+      }
+      if (currWhEl) {
+        const lastWh = chargeWhs.length ? chargeWhs[chargeWhs.length - 1] : null;
+        currWhEl.textContent = Number.isFinite(lastWh) ? formatWh(lastWh) : '–';
       }
 
       const lastTs = chargeTimestamps[chargeTimestamps.length - 1];

@@ -237,6 +237,12 @@
       }
 
       chart.draw();
+
+      const currEl = document.getElementById('cpu-current');
+      if (currEl) {
+        const v = powers.length ? powers[powers.length - 1] : null;
+        currEl.textContent = formatW(v);
+      }
     } catch (e) {
       console.error(e);
     }
