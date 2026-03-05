@@ -42,7 +42,7 @@ batttracker-flask-app
    ./install.sh
    ```
 
-6. **Access the web dashboard:**
+3. **Access the web dashboard:**
    Open your browser to `http://localhost:8678` to view the dashboard.
 
 ## Usage
