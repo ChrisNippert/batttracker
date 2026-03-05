@@ -10,6 +10,9 @@
       font-family: system-ui, sans-serif;
       background: #111827;
       color: #e5e7eb;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
     header {
       padding: 0.5rem 1.1rem 0.5rem 0;
@@ -27,14 +30,16 @@
       color: #9ca3af;
     }
     main {
-      padding: 0.75rem 1.1rem 0.75rem 0;
+      padding: 0.3rem 1.1rem 0.75rem 0;
       max-width: none;
       margin: 0;
       display: grid;
-      grid-template-columns: minmax(220px, 24%) minmax(0, 1fr);
-      gap: 1.1rem;
+      grid-template-columns: minmax(220px, 20%) minmax(0, 1fr);
+      column-gap: 1.8rem;
+      row-gap: 1.1rem;
       align-items: stretch;
-      min-height: calc(100vh - 3.5rem);
+      flex: 1 1 auto;
+      min-height: calc(100vh - 3rem);
     }
     .dashboard-panel {
       display: flex;
@@ -62,13 +67,13 @@
     }
     .chart-container {
       position: relative;
-      height: 185px;
-      min-height: 110px;
-      margin-bottom: 0.35rem;
+      height: 215px;
+      min-height: 130px;
+      margin-bottom: 0.45rem;
     }
     canvas {
-      max-height: 185px;
-      min-height: 110px;
+      max-height: 215px;
+      min-height: 130px;
     }
     .stats {
       margin-top: 0.3rem;
@@ -120,13 +125,17 @@
     }
     /* Battery stats side panel */
     #stats-panel {
-      position: sticky;
-      top: 0.75rem;
+      position: relative;
       align-self: stretch;
-      height: calc(100vh - 3.5rem);
+      height: 100%;
+      margin-top: -0.3rem; /* keep sidebar flush with header despite main padding */
     }
     #stats-panel .card {
       height: 100%;
+      background: #020617;
+      border-color: #1f2937;
+      box-shadow: none;
+      border-radius: 0;
     }
     #stats-panel .stats {
       flex: 1 1 auto;
@@ -156,14 +165,26 @@
     #charts-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      grid-template-rows: minmax(0, 45%) minmax(0, 55%);
-      gap: 1.1rem;
-      align-items: stretch;
+      grid-template-rows: auto minmax(0, 1fr);
+      row-gap: 1.3rem;
+      column-gap: 1.1rem;
+      align-items: start;
+      max-width: 1350px;
+      margin: 0.4rem auto 0;
       height: 100%;
     }
     #charge-panel {
       grid-column: 1 / span 3;
       grid-row: 1;
+    }
+    #charge-panel .card {
+      width: 100%;
+      max-width: none;
+    }
+    #power-panel .card,
+    #cpu-panel .card,
+    #gpu-panel .card {
+      height: 100%;
     }
     #power-panel {
       grid-column: 1;
@@ -322,10 +343,6 @@
                   <div class="stat-label">Max (W)</div>
                   <div class="stat-value" id="sel-max">–</div>
                 </div>
-              </div>
-              <div class="stat-block" style="margin-top:0.3rem;">
-                <div class="stat-label">Slope (W/hr)</div>
-                <div class="stat-value" id="sel-slope">–</div>
               </div>
               <div class="selection-hint">
                 Drag on the chart to see stats; selection persists.
@@ -954,12 +971,10 @@
       const minEl = document.getElementById('sel-min');
       const meanEl = document.getElementById('sel-mean');
       const maxEl = document.getElementById('sel-max');
-      const slopeEl = document.getElementById('sel-slope');
 
       if (!densePowers.length || startIdx == null || endIdx == null) {
         rangeEl.textContent = 'no selection';
         minEl.textContent = meanEl.textContent = maxEl.textContent = '–';
-        if (slopeEl) slopeEl.textContent = '–';
         return;
       }
 
@@ -969,7 +984,6 @@
       if (e <= s) {
         rangeEl.textContent = 'no selection';
         minEl.textContent = meanEl.textContent = maxEl.textContent = '–';
-        if (slopeEl) slopeEl.textContent = '–';
         return;
       }
 
@@ -981,20 +995,10 @@
       const maxV = Math.max(...subPowers);
       const meanV = mean(subPowers);
 
-      // simple slope: change in power over time (W/hr)
-      let slopeStr = '–';
-      const dtHours = (tsEnd - tsStart) / 3600;
-      if (Number.isFinite(dtHours) && dtHours > 0.01) {
-        const dP = subPowers[subPowers.length - 1] - subPowers[0];
-        const slope = dP / dtHours;
-        slopeStr = `${formatW(slope)} W/hr`;
-      }
-
       rangeEl.textContent = `${formatTime(tsStart)} → ${formatTime(tsEnd)}`;
       minEl.textContent = formatW(minV);
       meanEl.textContent = formatW(meanV);
       maxEl.textContent = formatW(maxV);
-      if (slopeEl) slopeEl.textContent = slopeStr;
     }
 
     function findClosestIndexForTs(ts) {
