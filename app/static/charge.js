@@ -50,16 +50,14 @@
   function updateChargeSelectionStats(startIdx, endIdx) {
     const slopeEl = document.getElementById('battery-stat-slope');
     if (!slopeEl) return;
-    if (!chargePercents.length || startIdx == null || endIdx == null) {
+    if (!chargePercents.length) {
       slopeEl.textContent = '–';
       return;
     }
-    const s = Math.max(0, Math.min(startIdx, endIdx));
-    const e = Math.min(chargePercents.length - 1, Math.max(startIdx, endIdx));
-    if (e <= s) {
-      slopeEl.textContent = '–';
-      return;
-    }
+    const n = chargePercents.length;
+    const windowSize = Math.min(10, n);
+    const s = n - windowSize;
+    const e = n - 1;
     const subPercents = chargePercents.slice(s, e + 1);
     const subWhs = chargeWhs.slice(s, e + 1);
     const tsStart = chargeTimestamps[s];
@@ -222,13 +220,11 @@
   });
 
   function updateChargeEta() {
-    const etaEmptyEl = document.getElementById('battery-stat-eta-empty');
-    const etaFullEl = document.getElementById('battery-stat-eta-full');
-    if (!etaEmptyEl || !etaFullEl) return;
+    const etaEl = document.getElementById('charge-eta');
+    if (!etaEl) return;
 
     if (!chargeWhs.length || !chargeFulls.length || ns.latestPowerW == null || !Number.isFinite(ns.latestPowerW) || Math.abs(ns.latestPowerW) < 0.1) {
-      etaEmptyEl.textContent = '–';
-      etaFullEl.textContent = '–';
+      etaEl.textContent = '–';
       return;
     }
 
@@ -258,11 +254,20 @@
       }
     }
 
-    const etaEmptyStr = etaEmpty && etaEmpty > 0.03 ? formatDurationHours(etaEmpty) : '–';
-    const etaFullStr = etaFull && etaFull > 0.03 ? formatDurationHours(etaFull) : '–';
+    let label = '–';
+    if (etaEmpty && etaEmpty > 0.03 && (!etaFull || etaFull <= 0.03)) {
+      label = `${formatDurationHours(etaEmpty)} to empty`;
+    } else if (etaFull && etaFull > 0.03 && (!etaEmpty || etaEmpty <= 0.03)) {
+      label = `${formatDurationHours(etaFull)} to full`;
+    } else if (etaEmpty && etaEmpty > 0.03 && etaFull && etaFull > 0.03) {
+      label = `${formatDurationHours(etaEmpty)} to empty / ${formatDurationHours(etaFull)} to full`;
+    }
 
-    etaEmptyEl.textContent = etaEmptyStr;
-    etaFullEl.textContent = etaFullStr;
+    if (ns.lastBatteryStatus === 'Full') {
+      label = 'Battery full';
+    }
+
+    etaEl.textContent = label;
   }
 
   async function fetchChargeData() {
