@@ -5,10 +5,6 @@
   <title>Battery Power Tracker</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    html,
-    body {
-      height: 100%;
-    }
     body {
       margin: 0;
       font-family: system-ui, sans-serif;
@@ -16,7 +12,8 @@
       color: #e5e7eb;
       display: flex;
       flex-direction: column;
-      overflow: hidden; /* disable page scrolling */
+      overflow-y: auto;
+      overflow-x: hidden;
     }
     header {
       padding: 0.5rem 1.1rem 0.5rem 0;
@@ -174,7 +171,6 @@
       align-items: start;
       max-width: 1350px;
       margin: 0.4rem auto 0.75rem;
-      height: 100%;
     }
     #charge-panel {
       grid-column: 1 / span 3;
@@ -187,7 +183,7 @@
     #power-panel .card,
     #cpu-panel .card,
     #gpu-panel .card {
-      height: 100%;
+      height: auto;
     }
     #power-panel {
       grid-column: 1;
@@ -205,13 +201,65 @@
       main {
         display: flex;
         flex-direction: column;
+        padding: 0.25rem 0.6rem 0.6rem 0.6rem;
+      }
+      header h1 {
+        font-size: 0.8rem;
       }
       #stats-panel {
         position: static;
+        margin-top: 0;
       }
+      #stats-panel .stats {
+        max-height: 220px;
+      }
+      #stats-panel .stat-block {
+        padding: 0.05rem 0;
+      }
+      #stats-panel .stat-label {
+        font-size: 0.65rem;
+      }
+      #stats-panel .stat-value {
+        font-size: 0.85rem;
+      }
+      .card {
+        padding: 0.55rem 0.7rem 0.5rem 0.7rem;
+      }
+      .card-header {
+        font-size: 0.8rem;
+        flex-direction: column;
+        align-items: flex-start;
+        row-gap: 0.15rem;
+      }
+      .chart-container {
+        height: 185px;
+        min-height: 120px;
+      }
+      canvas {
+        max-height: 185px;
+        min-height: 120px;
+      }
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      /* On very small screens only, make charts a horizontal scrollable row of full-width panels */
+    }
+
+    @media (max-width: 640px) {
       #charts-grid {
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
+        margin: 0.4rem 0 0.75rem 0;
+        column-gap: 0.75rem;
+        row-gap: 0;
+        overflow-x: auto;
+        overflow-y: visible;
+        scroll-snap-type: x mandatory;
+      }
+      #charts-grid > .dashboard-panel {
+        flex: 0 0 100%;
+        max-width: 100%;
+        scroll-snap-align: start;
       }
     }
   </style>
