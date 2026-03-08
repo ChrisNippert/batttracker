@@ -19,10 +19,10 @@ if ! command -v grep &> /dev/null; then
     exit 1
 fi
 
-# grep -R "power_now" /sys/class/power_supply/ > /dev/null 2>&1
+# grep -R "power_now" /sys/class/power_supply/f > /dev/null 2>&1
 
 # check for python venv
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
