@@ -1,12 +1,14 @@
 import time
+import sqlite3
 import pandas as pd
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 
 import os
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 DATA_DIR = "data"
+DB_PATH = os.path.join(DATA_DIR, "batttracker.db")
 
 # Sampling / polling interval (seconds). Can be overridden via env var.
 _poll_env = os.environ.get("BATTRACKER_POLL_INTERVAL_S", "5")
@@ -73,6 +75,55 @@ amd_gpu_power_path = _find_amd_gpu_power_path()
 
 print(f"Battery: {battery_name}\nCPU energy path: {cpu_energy_path}\nGPU energy path: {gpu_energy_path}\nAMD GPU power path: {amd_gpu_power_path}\n")
 
+
+def _get_db_connection():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    return conn
+
+
+def _init_db():
+    conn = _get_db_connection()
+    cur = conn.cursor()
+    # Simple schema: one row per sample, integer timestamp seconds since epoch
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS battery_power (
+            timestamp INTEGER NOT NULL,
+            power REAL NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS battery_charge (
+            timestamp INTEGER NOT NULL,
+            charge REAL NOT NULL,
+            full REAL NOT NULL,
+            full_design REAL NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cpu_power (
+            timestamp INTEGER NOT NULL,
+            power REAL NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS gpu_power (
+            timestamp INTEGER NOT NULL,
+            power REAL NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
 def read_battery_power():
     with open(f"/sys/class/power_supply/{battery_name}/power_now", "r") as f:
         power = int(f.read().strip())
@@ -120,6 +171,7 @@ def cap_data():
     import os
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
+        _init_db()
 
         # Measure CPU and GPU package power from RAPL energy counters over ~1s window
         cpu_power = None
@@ -162,13 +214,14 @@ def cap_data():
         timestamp = int(time.time())
         date = time.strftime("%Y-%m-%d", time.localtime(timestamp))
 
+        conn = _get_db_connection()
+        cur = conn.cursor()
+
         # Log CPU/GPU power even if there is no battery present
         if cpu_power is not None:
-            with open(f"{DATA_DIR}/cpu_power_{date}.csv", "a") as f:
-                f.write(f"{timestamp},{cpu_power}\n")
+            cur.execute("INSERT INTO cpu_power (timestamp, power) VALUES (?, ?)", (timestamp, cpu_power))
         if gpu_power is not None:
-            with open(f"{DATA_DIR}/gpu_power_{date}.csv", "a") as f:
-                f.write(f"{timestamp},{gpu_power}\n")
+            cur.execute("INSERT INTO gpu_power (timestamp, power) VALUES (?, ?)", (timestamp, gpu_power))
 
         # Battery logging is independent and only occurs if a battery is present
         if battery_name is None:
@@ -177,13 +230,14 @@ def cap_data():
             power = read_battery_power()
             charge, full, full_design = read_battery_charge()
 
-            # Log power
-            with open(f"{DATA_DIR}/battery_power_{date}.csv", "a") as f:
-                f.write(f"{timestamp},{power}\n")
+            cur.execute("INSERT INTO battery_power (timestamp, power) VALUES (?, ?)", (timestamp, power))
+            cur.execute(
+                "INSERT INTO battery_charge (timestamp, charge, full, full_design) VALUES (?, ?, ?, ?)",
+                (timestamp, charge, full, full_design),
+            )
 
-            # Log charge
-            with open(f"{DATA_DIR}/battery_charge_{date}.csv", "a") as f:
-                f.write(f"{timestamp},{charge},{full},{full_design}\n")
+        conn.commit()
+        conn.close()
     except Exception as e:
         import traceback
         print(f"[ERROR] {time.strftime('%Y-%m-%d %H:%M:%S')} Exception in cap_data: {e}")
@@ -220,37 +274,32 @@ def get_battery_status():
     }
 
 
-def _load_last_24h(prefix, col_names):
-    """Load and coalesce the last 24 hours of data for a metric.
+def _query_series(table, select_cols, since=None, window_seconds=24 * 60 * 60):
+    """Query a time series from SQLite.
 
-    prefix: base filename (e.g. "battery_power", "battery_charge", "cpu_power", "gpu_power").
-    col_names: list of column names matching the CSV layout.
+    Returns a pandas DataFrame with at least a 'timestamp' column and the
+    requested value columns, filtered to the last `window_seconds` and
+    optionally only rows with timestamp > since.
     """
     now_ts = int(time.time())
-    cutoff = now_ts - 24 * 60 * 60
+    cutoff = now_ts - window_seconds
 
-    # For a 24h window we only need today and yesterday.
-    today = time.strftime("%Y-%m-%d", time.localtime(now_ts))
-    yesterday = time.strftime("%Y-%m-%d", time.localtime(cutoff))
-    dates = {today, yesterday}
+    where_clauses = ["timestamp >= ?"]
+    params = [cutoff]
+    if since is not None:
+        where_clauses.append("timestamp > ?")
+        params.append(int(since))
 
-    dfs = []
-    for d in dates:
-        path = f"{DATA_DIR}/{prefix}_{d}.csv"
-        if os.path.exists(path):
-            try:
-                df_part = pd.read_csv(path, header=None, names=col_names)
-                dfs.append(df_part)
-            except Exception:
-                continue
+    sql = f"SELECT timestamp, {', '.join(select_cols)} FROM {table} WHERE " + " AND ".join(where_clauses) + " ORDER BY timestamp ASC"
 
-    if not dfs:
+    conn = _get_db_connection()
+    try:
+        df = pd.read_sql_query(sql, conn, params=params)
+    finally:
+        conn.close()
+
+    if df.empty:
         return None
-
-    df = pd.concat(dfs, ignore_index=True)
-    if "timestamp" in df.columns:
-        df = df[df["timestamp"] >= cutoff]
-        df = df.sort_values("timestamp")
     return df
 @app.route("/")
 def index():
@@ -261,7 +310,8 @@ def index():
 @app.route("/api/past24")
 def api_past24():
     try:
-        df = _load_last_24h("battery_power", ["timestamp", "power"])
+        since = request.args.get("since", type=int)
+        df = _query_series("battery_power", ["power"], since=since)
         if df is None or df.empty:
             raise Exception("no battery power data")
         return jsonify({
@@ -275,7 +325,8 @@ def api_past24():
 @app.route("/api/charge24")
 def api_charge24():
     try:
-        df = _load_last_24h("battery_charge", ["timestamp", "charge", "full", "full_design"])
+        since = request.args.get("since", type=int)
+        df = _query_series("battery_charge", ["charge", "full", "full_design"], since=since)
         if df is None or df.empty:
             raise Exception("no battery charge data")
         return jsonify({
@@ -291,7 +342,8 @@ def api_charge24():
 @app.route("/api/cpu24")
 def api_cpu24():
     try:
-        df = _load_last_24h("cpu_power", ["timestamp", "power"])
+        since = request.args.get("since", type=int)
+        df = _query_series("cpu_power", ["power"], since=since)
         if df is None or df.empty:
             raise Exception("no cpu data")
         return jsonify({
@@ -305,7 +357,8 @@ def api_cpu24():
 @app.route("/api/gpu24")
 def api_gpu24():
     try:
-        df = _load_last_24h("gpu_power", ["timestamp", "power"])
+        since = request.args.get("since", type=int)
+        df = _query_series("gpu_power", ["power"], since=since)
         if df is None or df.empty:
             raise Exception("no gpu data")
         return jsonify({

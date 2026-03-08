@@ -23,6 +23,8 @@
   let chargeDragEndIdx = null;
   let chargeHasUserSelection = false;
 
+  let lastFetchedTs = null;
+
   function formatPercent(v) {
     if (v === null || Number.isNaN(v)) return '–';
     return v.toFixed(1);
@@ -272,7 +274,11 @@
 
   async function fetchChargeData() {
     try {
-      const res = await fetch('/api/charge24');
+      let url = '/api/charge24';
+      if (lastFetchedTs != null) {
+        url += `?since=${encodeURIComponent(lastFetchedTs)}`;
+      }
+      const res = await fetch(url);
       const json = await res.json();
 
       let timestamps = (json.timestamps || []).map(Number);
@@ -285,7 +291,7 @@
         .filter(([t, v, f, fd]) => Number.isFinite(t) && Number.isFinite(v) && Number.isFinite(f) && Number.isFinite(fd))
         .sort((a, b) => a[0] - b[0]);
 
-      if (!zipped.length) {
+      if (!zipped.length && chargeTimestamps.length === 0) {
         chargeTimestamps = [];
         chargeWhs = [];
         chargeFulls = [];
@@ -306,12 +312,63 @@
         return;
       }
 
-      let tsArr = zipped.map((p) => p[0]);
-      let whArr = zipped.map((p) => p[1]);
-      let fullArr = zipped.map((p) => p[2]);
-      let fullDesignArr = zipped.map((p) => p[3]);
+      if (zipped.length) {
+        let tsArr = zipped.map((p) => p[0]);
+        let whArr = zipped.map((p) => p[1]);
+        let fullArr = zipped.map((p) => p[2]);
+        let fullDesignArr = zipped.map((p) => p[3]);
 
-      const ds = ns.downsampleByMean(tsArr, [whArr, fullArr, fullDesignArr]);
+        if (chargeTimestamps.length === 0 || lastFetchedTs == null) {
+          chargeTimestamps = tsArr;
+          chargeWhs = whArr;
+          chargeFulls = fullArr;
+          chargeFullDesigns = fullDesignArr;
+        } else {
+          chargeTimestamps = chargeTimestamps.concat(tsArr);
+          chargeWhs = chargeWhs.concat(whArr);
+          chargeFulls = chargeFulls.concat(fullArr);
+          chargeFullDesigns = chargeFullDesigns.concat(fullDesignArr);
+        }
+
+        lastFetchedTs = chargeTimestamps[chargeTimestamps.length - 1];
+      }
+
+      // Keep only last 24h
+      if (chargeTimestamps.length) {
+        const lastTs = chargeTimestamps[chargeTimestamps.length - 1];
+        const cutoff = lastTs - 24 * 60 * 60;
+        let firstIdx = 0;
+        while (firstIdx < chargeTimestamps.length && chargeTimestamps[firstIdx] < cutoff) {
+          firstIdx++;
+        }
+        if (firstIdx > 0) {
+          chargeTimestamps = chargeTimestamps.slice(firstIdx);
+          chargeWhs = chargeWhs.slice(firstIdx);
+          chargeFulls = chargeFulls.slice(firstIdx);
+          chargeFullDesigns = chargeFullDesigns.slice(firstIdx);
+        }
+      }
+
+      // Downsample for plotting
+      if (!chargeTimestamps.length) {
+        chargeWhs = [];
+        chargeFulls = [];
+        chargeFullDesigns = [];
+        chargePercents = [];
+        chargeHealthPercents = [];
+        chargeCapacityWhs = [];
+        chart.data.labels = [];
+        chart.data.datasets[0].data = [];
+        chart.data.datasets[1].data = [];
+        chart.data.datasets[2].data = [];
+        chart.data.datasets[3].data = [];
+        chart.data.datasets[4].data = [];
+        chart.update('none');
+        updateChargeSelectionStats(null, null);
+        return;
+      }
+
+      const ds = ns.downsampleByMean(chargeTimestamps, [chargeWhs, chargeFulls, chargeFullDesigns]);
       chargeTimestamps = ds.timestamps;
       [chargeWhs, chargeFulls, chargeFullDesigns] = ds.values;
 

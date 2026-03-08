@@ -8,6 +8,8 @@
   let timestamps = [];
   let powers = [];
 
+  let lastFetchedTs = null;
+
   let selectedStartTs = null;
   let selectedEndTs = null;
   let selectedStartIdx = null;
@@ -178,7 +180,11 @@
 
   async function fetchGpuData() {
     try {
-      const res = await fetch('/api/gpu24');
+      let url = '/api/gpu24';
+      if (lastFetchedTs != null) {
+        url += `?since=${encodeURIComponent(lastFetchedTs)}`;
+      }
+      const res = await fetch(url);
       const json = await res.json();
 
       let tsArr = (json.timestamps || []).map(Number);
@@ -188,7 +194,7 @@
         .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v))
         .sort((a, b) => a[0] - b[0]);
 
-      if (!zipped.length) {
+      if (!zipped.length && timestamps.length === 0) {
         timestamps = [];
         powers = [];
         chart.data.labels = [];
@@ -201,19 +207,45 @@
         return;
       }
 
-      tsArr = zipped.map((p) => p[0]);
-      powArr = zipped.map((p) => p[1]);
+      if (zipped.length) {
+        tsArr = zipped.map((p) => p[0]);
+        powArr = zipped.map((p) => p[1]);
 
-      const ds = ns.downsampleByMean(tsArr, [powArr]);
-      timestamps = ds.timestamps;
-      [powers] = ds.values;
+        if (timestamps.length === 0 || lastFetchedTs == null) {
+          timestamps = tsArr;
+          powers = powArr;
+        } else {
+          timestamps = timestamps.concat(tsArr);
+          powers = powers.concat(powArr);
+        }
+
+        lastFetchedTs = timestamps[timestamps.length - 1];
+      }
+
+      // Downsample entire window and keep only last 24h
+      if (timestamps.length) {
+        const ds = ns.downsampleByMean(timestamps, [powers]);
+        timestamps = ds.timestamps;
+        [powers] = ds.values;
+
+        const lastTs = timestamps[timestamps.length - 1];
+        const cutoff = lastTs - 24 * 60 * 60;
+        let firstIdx = 0;
+        while (firstIdx < timestamps.length && timestamps[firstIdx] < cutoff) {
+          firstIdx++;
+        }
+        if (firstIdx > 0) {
+          timestamps = timestamps.slice(firstIdx);
+          powers = powers.slice(firstIdx);
+        }
+      }
 
       const labels = timestamps.map((ts) => formatTime(ts));
       chart.data.labels = labels;
       chart.data.datasets[0].data = powers;
       chart.update('none');
 
-      const lastTs = timestamps[timestamps.length - 1];
+      const lastTs = timestamps.length ? timestamps[timestamps.length - 1] : null;
       const lastUpdated = document.getElementById('gpu-last-updated');
       if (lastUpdated) {
         if (lastTs) {

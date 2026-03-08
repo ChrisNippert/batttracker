@@ -6,8 +6,16 @@
 
   const ctx = canvasEl.getContext('2d');
 
+  // Raw series (all points kept for last 24h window)
+  let rawTimestamps = [];
+  let rawPowers = [];
+
+  // Densified / downsampled data actually plotted
   let denseTimestamps = [];
   let densePowers = [];
+
+  // Track last timestamp we've fetched from the server
+  let lastFetchedTs = null;
 
   let hasUserSelection = false;
   let selectedStartTs = null;
@@ -189,19 +197,94 @@
     }
   });
 
+  function rebuildDenseFromRaw() {
+    if (!rawTimestamps.length || !rawPowers.length) {
+      denseTimestamps = [];
+      densePowers = [];
+      chart.data.labels = [];
+      chart.data.datasets[0].data = [];
+      chart.update('none');
+      updateQuarterStats();
+      updateSelectionStats(null, null);
+      return;
+    }
+
+    // Fill gaps with zero as before
+    const GAP_THRESHOLD = 15; // seconds
+    const tArr = rawTimestamps;
+    const pArr = rawPowers;
+
+    let denseT = [tArr[0]];
+    let denseP = [pArr[0]];
+    for (let i = 1; i < tArr.length; i++) {
+      const prevT = tArr[i - 1];
+      const currT = tArr[i];
+      const currV = pArr[i];
+      const gap = currT - prevT;
+      if (gap > GAP_THRESHOLD) {
+        const mid = prevT + gap / 2;
+        denseT.push(mid);
+        denseP.push(0);
+      }
+      denseT.push(currT);
+      denseP.push(currV);
+    }
+
+    const ds = ns.downsampleByMean(denseT, [denseP]);
+    denseTimestamps = ds.timestamps;
+    [densePowers] = ds.values;
+
+    const labels = denseTimestamps.map((ts) => formatTime(ts));
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = densePowers;
+    chart.update('none');
+
+    updateQuarterStats();
+
+    if (hasUserSelection && selectedStartTs != null && selectedEndTs != null) {
+      selectedStartIdx = findClosestIndexForTs(selectedStartTs);
+      selectedEndIdx = findClosestIndexForTs(selectedEndTs);
+      updateSelectionStats(selectedStartIdx, selectedEndIdx);
+    } else {
+      if (densePowers.length) {
+        updateSelectionStats(0, densePowers.length - 1);
+      } else {
+        updateSelectionStats(null, null);
+      }
+    }
+  }
+
+  function pruneToLast24h() {
+    if (!rawTimestamps.length) return;
+    const lastTs = rawTimestamps[rawTimestamps.length - 1];
+    const cutoff = lastTs - 24 * 60 * 60;
+    let firstIdx = 0;
+    while (firstIdx < rawTimestamps.length && rawTimestamps[firstIdx] < cutoff) {
+      firstIdx++;
+    }
+    if (firstIdx > 0) {
+      rawTimestamps = rawTimestamps.slice(firstIdx);
+      rawPowers = rawPowers.slice(firstIdx);
+    }
+  }
+
   async function fetchData() {
     try {
-      const res = await fetch('/api/past24');
+      let url = '/api/past24';
+      if (lastFetchedTs != null) {
+        url += `?since=${encodeURIComponent(lastFetchedTs)}`;
+      }
+      const res = await fetch(url);
       const json = await res.json();
-
       let timestamps = (json.timestamps || []).map(Number);
       let powers = (json.powers || []).map(Number);
+
       const zipped = timestamps
         .map((t, i) => [t, powers[i]])
         .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v))
         .sort((a, b) => a[0] - b[0]);
 
-      if (!zipped.length) {
+      if (!zipped.length && rawTimestamps.length === 0) {
         denseTimestamps = [];
         densePowers = [];
         chart.data.labels = [];
@@ -215,41 +298,26 @@
         return;
       }
 
-      timestamps = zipped.map((p) => p[0]);
-      powers = zipped.map((p) => p[1]);
+      if (zipped.length) {
+        const newTs = zipped.map((p) => p[0]);
+        const newP = zipped.map((p) => p[1]);
 
-      if (powers.length) {
-        ns.latestPowerW = powers[powers.length - 1];
-      }
-
-      denseTimestamps = [timestamps[0]];
-      densePowers = [powers[0]];
-      const GAP_THRESHOLD = 15; // seconds
-
-      for (let i = 1; i < timestamps.length; i++) {
-        const prevT = timestamps[i - 1];
-        const currT = timestamps[i];
-        const currV = powers[i];
-        const gap = currT - prevT;
-        if (gap > GAP_THRESHOLD) {
-          const mid = prevT + gap / 2;
-          denseTimestamps.push(mid);
-          densePowers.push(0);
+        if (rawTimestamps.length === 0 || lastFetchedTs == null) {
+          rawTimestamps = newTs;
+          rawPowers = newP;
+        } else {
+          rawTimestamps = rawTimestamps.concat(newTs);
+          rawPowers = rawPowers.concat(newP);
         }
-        denseTimestamps.push(currT);
-        densePowers.push(currV);
+
+        lastFetchedTs = rawTimestamps[rawTimestamps.length - 1];
+        ns.latestPowerW = rawPowers[rawPowers.length - 1];
       }
 
-      const ds = ns.downsampleByMean(denseTimestamps, [densePowers]);
-      denseTimestamps = ds.timestamps;
-      [densePowers] = ds.values;
+      pruneToLast24h();
+      rebuildDenseFromRaw();
 
-      const labels = denseTimestamps.map((ts) => formatTime(ts));
-      chart.data.labels = labels;
-      chart.data.datasets[0].data = densePowers;
-      chart.update('none');
-
-      const lastTs = denseTimestamps[denseTimestamps.length - 1];
+      const lastTs = denseTimestamps.length ? denseTimestamps[denseTimestamps.length - 1] : null;
       const lastUpdated = document.getElementById('last-updated');
       if (lastUpdated) {
         if (lastTs) {
@@ -258,22 +326,6 @@
           lastUpdated.textContent = 'last update: no data yet';
         }
       }
-
-      updateQuarterStats();
-
-      if (hasUserSelection && selectedStartTs != null && selectedEndTs != null) {
-        selectedStartIdx = findClosestIndexForTs(selectedStartTs);
-        selectedEndIdx = findClosestIndexForTs(selectedEndTs);
-        updateSelectionStats(selectedStartIdx, selectedEndIdx);
-      } else {
-        if (densePowers.length) {
-          updateSelectionStats(0, densePowers.length - 1);
-        } else {
-          updateSelectionStats(null, null);
-        }
-      }
-
-      chart.draw();
 
       const currEl = document.getElementById('power-current');
       if (currEl) {
