@@ -14,6 +14,8 @@
       const temp = json.temperature;
       const manuf = json.manufacturer;
       const model = json.model;
+      const cpuName = json.cpu_name;
+      const gpuName = json.gpu_name;
 
       const statusEl = document.getElementById('battery-stat-status');
       const healthEl = document.getElementById('battery-stat-health');
@@ -21,6 +23,10 @@
       const cyclesEl = document.getElementById('battery-stat-cycles');
       const designEl = document.getElementById('battery-stat-design');
       const manufEl = document.getElementById('battery-stat-manuf');
+      const cpuTitleEl = document.getElementById('cpu-panel-title');
+      const gpuTitleEl = document.getElementById('gpu-panel-title');
+      const cpuPowerLabelEl = document.getElementById('cpu-power-label');
+      const gpuPowerLabelEl = document.getElementById('gpu-power-label');
 
       if (statusEl) statusEl.textContent = status;
 
@@ -53,6 +59,13 @@
       } else if (manufEl) {
         manufEl.textContent = '–';
       }
+
+      const cpuDisplay = cpuName || 'CPU';
+      const gpuDisplay = gpuName || 'GPU';
+      if (cpuTitleEl) cpuTitleEl.textContent = `${cpuDisplay} power (W) - last 24 hours`;
+      if (gpuTitleEl) gpuTitleEl.textContent = `${gpuDisplay} power (W) - last 24 hours`;
+      if (cpuPowerLabelEl) cpuPowerLabelEl.textContent = `${cpuDisplay} power (W)`;
+      if (gpuPowerLabelEl) gpuPowerLabelEl.textContent = `${gpuDisplay} power (W)`;
 
       // Save status string for ETA logic in charge chart
       ns.lastBatteryStatus = status;

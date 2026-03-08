@@ -1,5 +1,7 @@
 import time
 import sqlite3
+import subprocess
+import shutil
 import pandas as pd
 from flask import Flask, jsonify, render_template, request
 
@@ -73,8 +75,77 @@ def _find_amd_gpu_power_path():
 
 amd_gpu_power_path = _find_amd_gpu_power_path()
 
-print(f"Battery: {battery_name}\nCPU energy path: {cpu_energy_path}\nGPU energy path: {gpu_energy_path}\nAMD GPU power path: {amd_gpu_power_path}\n")
 
+def _run_text_command(args, timeout=2):
+    try:
+        res = subprocess.run(
+            args,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except Exception:
+        return None
+    if res.returncode != 0:
+        return None
+    return (res.stdout or "").strip()
+
+
+def detect_cpu_name():
+    """Best-effort CPU model detection."""
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            for line in f:
+                if line.lower().startswith("model name"):
+                    parts = line.split(":", 1)
+                    if len(parts) == 2:
+                        value = parts[1].strip()
+                        if value:
+                            return value
+    except Exception:
+        pass
+
+    out = _run_text_command(["lscpu"])
+    if out:
+        for line in out.splitlines():
+            if line.lower().startswith("model name:"):
+                value = line.split(":", 1)[1].strip()
+                if value:
+                    return value
+
+    return "CPU"
+
+
+def detect_gpu_name():
+    """Best-effort GPU model detection."""
+    if shutil.which("nvidia-smi"):
+        out = _run_text_command(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            timeout=2,
+        )
+        if out:
+            names = [line.strip() for line in out.splitlines() if line.strip()]
+            if names:
+                # If there are multiple GPUs, keep it compact in the title.
+                return names[0] if len(names) == 1 else f"{names[0]} (+{len(names)-1} more)"
+
+    if shutil.which("lspci"):
+        out = _run_text_command(["lspci"], timeout=2)
+        if out:
+            for line in out.splitlines():
+                lower = line.lower()
+                if "vga compatible controller" in lower or "3d controller" in lower or "display controller" in lower:
+                    parts = line.split(": ", 1)
+                    value = parts[1].strip() if len(parts) == 2 else line.strip()
+                    if value:
+                        return value
+
+    if amd_gpu_power_path:
+        return "AMD GPU"
+    if gpu_energy_path:
+        return "Integrated GPU"
+    return "GPU"
 
 def _get_db_connection():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -140,20 +211,14 @@ def read_battery_charge():
     return current / 1_000_000, full / 1_000_000, full_design / 1_000_000
 
 
-def read_cpu_energy_uj():
-    """Read package energy counter in microjoules from RAPL, if available."""
-    if cpu_energy_path is None:
-        raise Exception("CPU energy path not available")
-    with open(cpu_energy_path, "r") as f:
-        return int(f.read().strip())
-
-
-def read_gpu_energy_uj():
-    """Read integrated GPU/GT energy counter in microjoules from RAPL, if available."""
-    if gpu_energy_path is None:
-        raise Exception("GPU energy path not available")
-    with open(gpu_energy_path, "r") as f:
-        return int(f.read().strip())
+def make_sysfs_int_reader(path):
+    """Create a function that reads an integer value from a sysfs file."""
+    def _read_int():
+        if not path:
+            raise Exception("path not available")
+        with open(path, "r") as f:
+            return int(f.read().strip())
+    return _read_int
 
 
 def read_amd_gpu_power_w():
@@ -167,61 +232,179 @@ def read_amd_gpu_power_w():
         microwatts = int(f.read().strip())
     return microwatts / 1_000_000.0
 
+
+def read_nvidia_smi_gpu_power_w():
+    """Read total NVIDIA GPU power draw in watts via nvidia-smi."""
+    result = subprocess.run(
+        [
+            "nvidia-smi",
+            "--query-gpu=power.draw",
+            "--format=csv,noheader,nounits",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=2,
+    )
+    if result.returncode != 0:
+        raise Exception(f"nvidia-smi failed: {result.stderr.strip()}")
+    values = []
+    for line in result.stdout.splitlines():
+        raw = line.strip()
+        if not raw or raw == "N/A":
+            continue
+        values.append(float(raw))
+    if not values:
+        raise Exception("no NVIDIA GPU power values found")
+    return sum(values)
+
+
+def make_delta_power_getter(read_counter, counter_scale=1_000_000.0):
+    """Create a getter that converts monotonically increasing counters to watts."""
+    state = {"prev_t": None, "prev_e": None}
+
+    def _get_power_w():
+        now = time.time()
+        energy = read_counter()
+        prev_t = state["prev_t"]
+        prev_e = state["prev_e"]
+        state["prev_t"] = now
+        state["prev_e"] = energy
+        if prev_t is None or prev_e is None:
+            return None
+        dt = now - prev_t
+        delta_uj = energy - prev_e
+        if dt <= 0 or delta_uj < 0:
+            return None
+        return (delta_uj / counter_scale) / dt
+
+    return _get_power_w
+
+
+CPU_POWER_PROVIDERS = [
+    {
+        "name": "intel_rapl_cpu",
+        "detect": lambda: cpu_energy_path is not None,
+        "build_getter": lambda: make_delta_power_getter(
+            make_sysfs_int_reader(cpu_energy_path), counter_scale=1_000_000.0
+        ),
+    },
+]
+
+GPU_POWER_PROVIDERS = [
+    {
+        "name": "intel_rapl_gpu",
+        "detect": lambda: gpu_energy_path is not None,
+        "build_getter": lambda: make_delta_power_getter(
+            make_sysfs_int_reader(gpu_energy_path), counter_scale=1_000_000.0
+        ),
+    },
+    {
+        "name": "amd_hwmon_gpu",
+        "detect": lambda: amd_gpu_power_path is not None,
+        "build_getter": lambda: read_amd_gpu_power_w,
+    },
+    {
+        "name": "nvidia_smi_gpu",
+        "detect": lambda: shutil.which("nvidia-smi") is not None,
+        "build_getter": lambda: read_nvidia_smi_gpu_power_w,
+    },
+]
+
+
+def _build_enabled_getters(provider_defs):
+    enabled = []
+    for provider in provider_defs:
+        try:
+            if provider["detect"]():
+                enabled.append(
+                    {
+                        "name": provider["name"],
+                        "getter": provider["build_getter"](),
+                    }
+                )
+        except Exception:
+            continue
+    return enabled
+
+
+CPU_GETTERS = _build_enabled_getters(CPU_POWER_PROVIDERS)
+GPU_GETTERS = _build_enabled_getters(GPU_POWER_PROVIDERS)
+CPU_DEVICE_NAME = detect_cpu_name()
+GPU_DEVICE_NAME = detect_gpu_name()
+
+print(
+    f"Battery: {battery_name}\n"
+    f"CPU energy path: {cpu_energy_path}\n"
+    f"GPU energy path: {gpu_energy_path}\n"
+    f"AMD GPU power path: {amd_gpu_power_path}\n"
+    f"CPU name: {CPU_DEVICE_NAME}\n"
+    f"GPU name: {GPU_DEVICE_NAME}\n"
+    f"CPU providers: {[p['name'] for p in CPU_GETTERS]}\n"
+    f"GPU providers: {[p['name'] for p in GPU_GETTERS]}\n"
+)
+
+
+def _collect_and_write_power(cur, table_name, timestamp, getter_defs):
+    """Run provider getter(s) and write first successful value to SQLite."""
+    for provider in getter_defs:
+        value = write_power_sample(
+            cur,
+            table_name,
+            timestamp,
+            provider["getter"],
+            provider_name=provider["name"],
+        )
+        if value is not None:
+            return value
+    print(f"[WARN] no sample written for {table_name} at {timestamp}")
+    return None
+
+
+def write_power_sample(cur, table_name, timestamp, get_power_w, provider_name="unknown"):
+    """Call any power getter function and write a valid sample to SQLite."""
+    try:
+        value = get_power_w()
+    except Exception as e:
+        print(
+            f"[WARN] provider '{provider_name}' failed for {table_name} at {timestamp}: {e}"
+        )
+        return None
+    if value is None:
+        print(
+            f"[DEBUG] provider '{provider_name}' returned no value for {table_name} at {timestamp}"
+        )
+        return None
+    cur.execute(
+        f"INSERT INTO {table_name} (timestamp, power) VALUES (?, ?)",
+        (timestamp, value),
+    )
+    print(
+        f"[DEBUG] wrote {table_name} sample from '{provider_name}' at {timestamp}: {value:.3f} W"
+    )
+    return value
+
+
+def collect_cpu_power(cur, timestamp, getter_defs):
+    return _collect_and_write_power(cur, "cpu_power", timestamp, getter_defs)
+
+
+def collect_gpu_power(cur, timestamp, getter_defs):
+    return _collect_and_write_power(cur, "gpu_power", timestamp, getter_defs)
+
 def cap_data():
     import os
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
         _init_db()
-
-        # Measure CPU and GPU package power from RAPL energy counters over ~1s window
-        cpu_power = None
-        gpu_power = None
-        try:
-            e1_cpu = read_cpu_energy_uj()
-            try:
-                e1_gpu = read_gpu_energy_uj()
-            except Exception:
-                e1_gpu = None
-            t1 = time.time()
-            time.sleep(1.0)
-            e2_cpu = read_cpu_energy_uj()
-            try:
-                e2_gpu = read_gpu_energy_uj()
-            except Exception:
-                e2_gpu = None
-            t2 = time.time()
-            dt = t2 - t1
-            if dt > 0:
-                delta_cpu_uj = e2_cpu - e1_cpu
-                if delta_cpu_uj >= 0:
-                    # energy_uj is microjoules -> convert to joules and divide by elapsed seconds
-                    cpu_power = (delta_cpu_uj / 1_000_000.0) / dt
-                if e1_gpu is not None and e2_gpu is not None:
-                    delta_gpu_uj = e2_gpu - e1_gpu
-                    if delta_gpu_uj >= 0:
-                        gpu_power = (delta_gpu_uj / 1_000_000.0) / dt
-        except Exception:
-            # If RAPL is unavailable or unreadable, just skip CPU logging
-            cpu_power = None
-            gpu_power = None
-
-        # Fallback: if no GPU power from RAPL, try AMD hwmon instantaneous power
-        if gpu_power is None:
-            try:
-                gpu_power = read_amd_gpu_power_w()
-            except Exception:
-                gpu_power = None
         timestamp = int(time.time())
-        date = time.strftime("%Y-%m-%d", time.localtime(timestamp))
 
         conn = _get_db_connection()
         cur = conn.cursor()
 
-        # Log CPU/GPU power even if there is no battery present
-        if cpu_power is not None:
-            cur.execute("INSERT INTO cpu_power (timestamp, power) VALUES (?, ?)", (timestamp, cpu_power))
-        if gpu_power is not None:
-            cur.execute("INSERT INTO gpu_power (timestamp, power) VALUES (?, ?)", (timestamp, gpu_power))
+        # Log CPU/GPU power even if there is no battery present.
+        collect_cpu_power(cur, timestamp, CPU_GETTERS)
+        collect_gpu_power(cur, timestamp, GPU_GETTERS)
 
         # Battery logging is independent and only occurs if a battery is present
         if battery_name is None:
@@ -270,7 +453,9 @@ def get_battery_status():
         "health": health,
         "temperature": temp,
         "manufacturer": manufacturer,
-        "model": model
+        "model": model,
+        "cpu_name": CPU_DEVICE_NAME,
+        "gpu_name": GPU_DEVICE_NAME,
     }
 
 
@@ -371,6 +556,16 @@ def api_gpu24():
 @app.route("/api/status")
 def api_status():
     return jsonify(get_battery_status())
+
+
+@app.route("/api/hardware")
+def api_hardware():
+    return jsonify({
+        "cpu_name": CPU_DEVICE_NAME,
+        "gpu_name": GPU_DEVICE_NAME,
+        "cpu_providers": [p["name"] for p in CPU_GETTERS],
+        "gpu_providers": [p["name"] for p in GPU_GETTERS],
+    })
 
 def main():
     while True:
